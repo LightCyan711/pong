@@ -89,8 +89,14 @@
 
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <script>
-/* ======= Constants ======= */
-const W=800,H=600,PW=12,PH=88,BR=8, PAD_SPEED=420, B_INIT=340, B_MAX=720, GROW=1.025, ANG_MAX=(38*Math.PI)/180;
+/* ======= Constants (가속 강화) ======= */
+const W=800,H=600,PW=12,PH=88,BR=8;
+const PAD_SPEED=420;
+const B_INIT=380;           // 초기속도 ↑
+const B_MAX=980;            // 최고속도 ↑
+const GROW_HIT=1.08;        // 패들 히트 시 강한 가속
+const GROW_WALL=1.015;      // 벽 튕김 시도 소폭 가속
+const ANG_MAX=(38*Math.PI)/180;
 const MATCH_SEC=120, WIN_SCORE=11;
 const COLORS={L1:'#4C6FFF', L2:'#2CC6B3', R1:'#FF7A59', R2:'#FFBA49'};
 
@@ -106,7 +112,7 @@ const S={
   ball:{x:W/2,y:H/2,vx:B_INIT,vy:0},
   sL:0, sR:0, rallyRight:Math.random()<.5, t:MATCH_SEC,
   L:[], R:[],
-  trail:[] // 🔥 불 이펙트(잔상) 기록
+  trail:[] // 🔥 불 이펙트(잔상)
 };
 
 /* ======= Helpers ======= */
@@ -147,7 +153,6 @@ let ortSession=null, aiReady=false;
 })();
 function obsLeft(py,oy){
   const bx=(S.ball.x/W)*2-1, by=(S.ball.y/H)*2-1;
-  const speed=Math.hypot(S.ball.vx,S.ball.vy);
   const bvx=clamp(S.ball.vx/B_MAX,-1,1), bvy=clamp(S.ball.vy/B_MAX,-1,1);
   const p=(py/H)*2-1, o=(oy/H)*2-1;
   const rp=clamp((S.ball.y-py)/(H/2),-1,1), ro=clamp((S.ball.y-oy)/(H/2),-1,1);
@@ -201,18 +206,22 @@ function apply(p, act){
   p.y=clamp(p.y+d, PH/2, H-PH/2);
 }
 function circleRect(cx,cy,cr,rx,ry,rw,rh){
-  const nx=clamp(cx,rx,rx+rw), ny=clamp(cy,ry,ry+h);
+  const nx=clamp(cx,rx,rx+rw), ny=clamp(cy,ry,ry+rh);
   const dx=cx-nx, dy=cy-ny;
   return dx*dx+dy*dy<=cr*cr;
 }
 function bounce(isLeft, py){
-  // 속도 증가 + 각도 변화
   const off=clamp((S.ball.y-py)/(PH/2),-1,1);
-  const sp=Math.min(B_MAX, Math.hypot(S.ball.vx,S.ball.vy)*GROW);
-  const ang=off*ANG_MAX; const dir=isLeft?1:-1;
-  S.ball.vx=dir*sp*Math.cos(ang); S.ball.vy=sp*Math.sin(ang);
-  S.ball.x+=dir*(PW/2+BR+2); S.ball.y+=(Math.random()*4-2);
-  // 잔상 폭발감(충돌 시 즉시 몇 점 추가)
+  const cur = Math.hypot(S.ball.vx,S.ball.vy);
+  const sp  = Math.min(B_MAX, cur * GROW_HIT); // 패들 맞을 때 강하게 가속
+  const ang=off*ANG_MAX, dir=isLeft?1:-1;
+
+  S.ball.vx=dir*sp*Math.cos(ang);
+  S.ball.vy=sp*Math.sin(ang);
+  S.ball.x+=dir*(PW/2+BR+2);
+  S.ball.y+=(Math.random()*4-2);
+
+  // 충돌 순간 잔상 강화
   for(let i=0;i<6;i++){
     S.trail.unshift({x:S.ball.x - dir*i*4, y:S.ball.y + (Math.random()*6-3), heat:1, r:BR+(i%2)});
   }
@@ -226,43 +235,42 @@ function resetRound(){
 /* ======= Fire/Trail Rendering ======= */
 function drawFlameTrail(){
   const speed=Math.hypot(S.ball.vx,S.ball.vy);
-  const heat=clamp((speed - B_INIT)/(B_MAX - B_INIT), 0, 1); // 0~1
-  const trailLen = Math.floor(6 + heat*24);
+  const heat=clamp((speed - B_INIT)/(B_MAX - B_INIT), 0, 1);     // 0~1
+  const trailLen = Math.floor(6 + heat*28);                      // 더 길게
+
   // 최신 위치 push
   S.trail.unshift({x:S.ball.x, y:S.ball.y, heat, r:BR});
-  if(S.trail.length > 80) S.trail.length = 80;
+  if(S.trail.length > 100) S.trail.length = 100;
 
-  // 불빛(가산 합성)
   ctx.save();
   ctx.globalCompositeOperation='lighter';
 
-  // 잔상: 뒤로 갈수록 투명/작아짐
   for(let i=0;i<Math.min(trailLen, S.trail.length); i++){
-    const t = i / trailLen;                 // 0(앞)~1(뒤)
+    const t = i / trailLen;                      // 0(앞)~1(뒤)
     const p = S.trail[i];
-    const a = (1 - t) * (0.10 + 0.35*heat); // alpha
-    const r = p.r * (1 + 0.6*(1 - t) * (0.2 + 0.8*heat));
+    const a = (1 - t) * (0.10 + 0.45*heat);      // alpha ↑
+    const r = p.r * (1 + 0.8*(1 - t) * (0.2 + 0.8*heat)); // 크기 ↑
 
-    // 외곽 글로우(붉은색→노란색)
-    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r*2);
-    const c1 = `rgba(255,80,35,${a*0.6})`;
-    const c2 = `rgba(255,180,60,${a*0.18})`;
+    // 외곽 글로우
+    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r*2.2);
+    const c1 = `rgba(255,70,30,${a*0.65})`;
+    const c2 = `rgba(255,170,50,${a*0.22})`;
     grad.addColorStop(0, c1);
     grad.addColorStop(1, c2);
     ctx.fillStyle=grad;
-    ctx.beginPath(); ctx.arc(p.x, p.y, r*2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, r*2.2, 0, Math.PI*2); ctx.fill();
 
-    // 코어(노란색)
-    ctx.fillStyle = `rgba(255,200,70,${a})`;
-    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, r*0.6), 0, Math.PI*2); ctx.fill();
+    // 코어
+    ctx.fillStyle = `rgba(255,205,70,${a})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, r*0.65), 0, Math.PI*2); ctx.fill();
   }
 
-  // 현재 공 주변의 강한 글로우
+  // 현재 공 주변 강한 글로우
   {
-    const a0 = 0.20 + 0.45*heat;
-    const r0 = BR*(2.2 + 2.0*heat);
+    const a0 = 0.22 + 0.5*heat;
+    const r0 = BR*(2.3 + 2.2*heat);
     const g0 = ctx.createRadialGradient(S.ball.x, S.ball.y, 0, S.ball.x, S.ball.y, r0);
-    g0.addColorStop(0, `rgba(255,210,80,${a0})`);
+    g0.addColorStop(0, `rgba(255,215,90,${a0})`);
     g0.addColorStop(1, `rgba(255,120,40,0)`);
     ctx.fillStyle = g0;
     ctx.beginPath(); ctx.arc(S.ball.x, S.ball.y, r0, 0, Math.PI*2); ctx.fill();
@@ -275,14 +283,14 @@ function drawFlameTrail(){
 function draw(){
   bg();
 
-  // 🔥 먼저 트레일(불 이펙트)
+  // 🔥 먼저 트레일
   drawFlameTrail();
 
   // 패들
   for(const p of S.L){ rr(26, p.y-PH/2, PW, PH, 6, p.color); }
   for(const p of S.R){ rr(W-26-PW, p.y-PH/2, PW, PH, 6, p.color); }
 
-  // 공 (코어/외곽)
+  // 공 코어
   circle(S.ball.x,S.ball.y,BR,'#222');
   circle(S.ball.x,S.ball.y,BR-2,'#1e1e1e');
   circle(S.ball.x,S.ball.y,BR-3,'#FFC857');
@@ -320,10 +328,26 @@ function loop(now=performance.now()){
 
     // move ball
     S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
-    if(S.ball.y<=BR){ S.ball.y=BR; S.ball.vy=Math.abs(S.ball.vy); }
-    if(S.ball.y>=H-BR){ S.ball.y=H-BR; S.ball.vy=-Math.abs(S.ball.vy); }
 
-    // collisions with paddles
+    // 위/아래 벽 충돌 + 소폭 가속
+    if(S.ball.y<=BR){
+      S.ball.y=BR;
+      S.ball.vy=Math.abs(S.ball.vy);
+      const cur=Math.hypot(S.ball.vx,S.ball.vy);
+      const sp = Math.min(B_MAX, cur*GROW_WALL);
+      const ang=Math.atan2(S.ball.vy,S.ball.vx);
+      S.ball.vx=Math.cos(ang)*sp; S.ball.vy=Math.sin(ang)*sp;
+    }
+    if(S.ball.y>=H-BR){
+      S.ball.y=H-BR;
+      S.ball.vy=-Math.abs(S.ball.vy);
+      const cur=Math.hypot(S.ball.vx,S.ball.vy);
+      const sp = Math.min(B_MAX, cur*GROW_WALL);
+      const ang=Math.atan2(S.ball.vy,S.ball.vx);
+      S.ball.vx=Math.cos(ang)*sp; S.ball.vy=Math.sin(ang)*sp;
+    }
+
+    // 패들 충돌
     if(S.ball.vx<0){
       for(const p of S.L){
         const L={x:26,y:p.y-PH/2,w:PW,h:PH};
@@ -336,11 +360,11 @@ function loop(now=performance.now()){
       }
     }
 
-    // goals
+    // 골
     if(S.ball.x<-BR){ S.sR++; S.rallyRight=true; resetRound(); }
     if(S.ball.x>W+BR){ S.sL++; S.rallyRight=false; resetRound(); }
 
-    // timer
+    // 타이머
     if(S.run){ S.t=Math.max(0,S.t-dt); timeEl.textContent=fmt(S.t); if(S.t===0){ endMatch(); } }
   }
   draw(); requestAnimationFrame(loop);
@@ -348,7 +372,7 @@ function loop(now=performance.now()){
 requestAnimationFrame(loop); bg();
 
 /* ======= Round/Modes ======= */
-function resetMatch(full){
+function resetMatch(){
   S.sL=0; S.sR=0; S.t=MATCH_SEC; S.rallyRight=Math.random()<.5; S.paused=false;
   S.trail.length=0;
   S.ball.x=W/2; S.ball.y=H/2; const a=(Math.random()*0.7-0.35), dir=S.rallyRight?1:-1; S.ball.vx=dir*B_INIT*Math.cos(a); S.ball.vy=B_INIT*Math.sin(a);
