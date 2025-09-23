@@ -32,20 +32,22 @@
   .btn.alt{background:#2b3fe6} .btn.ghost{background:#0b122e;color:#dfe6ff;border:1px solid #1a2144}
   .overlay{position:absolute;inset:0;border-radius:14px;background:
     radial-gradient(1200px 600px at 50% -40%, rgba(91,124,255,.14), transparent 60%), rgba(12,16,36,.88);
-    backdrop-filter:blur(6px) saturate(1.08);display:none;z-index:7}
+    backdrop-filter:blur(6px) saturate(1.08);display:none;z-index:8}
   .ctr{position:absolute;inset:0;display:grid;place-items:center;padding:16px}
-  .modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(720px,92%)}
+  .modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(840px,92%)}
   .mode{border-radius:14px;padding:16px;background:linear-gradient(180deg,#0f1638,#0c122e);
     border:1px solid #1a2144;cursor:pointer;text-align:center;transition:.2s}
   .mode:hover{box-shadow:0 12px 26px rgba(91,124,255,.25);transform:translateY(-1px)}
   .small{font-size:12px;color:#9eaad0}
   .vignette{position:absolute;inset:0;border-radius:14px;pointer-events:none;box-shadow:inset 0 0 120px rgba(0,0,0,.55)}
 
-  /* Multi panel */
-  .multi-wrap{position:absolute;left:12px;right:12px;top:12px;z-index:8}
-  .multi-head{display:flex;gap:8px;align-items:center}
-  .multi-panel{overflow:hidden;max-height:0;transition:max-height .35s ease; }
-  .multi-inner{margin-top:8px;padding:12px;border:1px solid #1a2144;border-radius:12px;background:#0d1334}
+  /* 모드 상단 탭(로컬/온라인 전환) */
+  .tabs{display:flex;gap:8px;margin-bottom:12px;justify-content:center}
+  .tab{padding:8px 14px;border-radius:10px;border:1px solid #1a2144;background:#0b122e;color:#cfd6ff;font-weight:900;cursor:pointer}
+  .tab.on{background:#1a2250;color:#fff}
+
+  /* 멀티 패널(온라인일 때만 표시) */
+  .multi-panel{margin-top:12px;padding:12px;border:1px solid #1a2144;border-radius:12px;background:#0d1334;width:min(840px,92%)}
   .seg{display:inline-flex;background:#0b122e;border:1px solid #1a2144;border-radius:10px;overflow:hidden}
   .seg button{border:0;background:transparent;color:#cfd6ff;padding:8px 12px;font-weight:800;cursor:pointer}
   .seg button.on{background:#1a2250;color:#fff}
@@ -55,7 +57,7 @@
 
   /* 하위 모드(슬라이드) */
   .sub{overflow:hidden;max-height:0;transition:max-height .28s ease; margin-top:8px}
-  .sub-inner{display:flex;gap:8px;align-items:center;justify-content:center}
+  .sub-inner{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
   .chip{padding:10px 14px;border-radius:10px;background:#16205a;color:#fff;border:1px solid #1a2144;cursor:pointer;font-weight:800}
   .chip:hover{background:#21307a}
 </style>
@@ -72,47 +74,6 @@
       <canvas id="cv" width="800" height="600"></canvas>
       <div class="vignette"></div>
 
-      <!-- Multiplayer toggle -->
-      <div class="multi-wrap">
-        <div class="multi-head">
-          <button id="btnMulti" class="btn ghost">멀티</button>
-          <div id="netBadge" class="pill">오프라인</div>
-          <div class="spacer"></div>
-        </div>
-        <div id="multiPanel" class="multi-panel">
-          <div class="multi-inner">
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <div class="seg" role="tablist">
-                <button id="tabHost" class="on">호스트</button>
-                <button id="tabJoin">참여</button>
-              </div>
-
-              <!-- 호스트 UI -->
-              <div id="hostUI" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <input id="hostName" class="input" placeholder="내 닉네임" maxlength="16" style="min-width:150px"/>
-                <button id="btnHostGo" class="btn alt">코드 생성</button>
-                <div id="hostInfo" class="pill" style="display:none">상태: 대기</div>
-                <div id="hostCode" class="pill" style="display:none">코드: ——</div>
-                <button id="btnCopy" class="btn ghost" style="display:none">코드 복사</button>
-                <button id="btnStart" class="btn" disabled>게임 시작</button>
-              </div>
-
-              <!-- 참여 UI -->
-              <div id="joinUI" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
-                <input id="joinName" class="input" placeholder="내 닉네임" maxlength="16" style="min-width:150px"/>
-                <input id="joinCode" class="input" placeholder="참여용 6자리 코드" maxlength="6"/>
-                <button id="btnJoinGo" class="btn alt">연결</button>
-                <div id="joinInfo" class="pill">상태: 대기</div>
-              </div>
-
-              <div style="width:100%;color:#9eaad0;font-size:12px;margin-top:6px">
-                호스트가 생성한 6자리 코드를 공유하고, 참여자는 코드를 입력해 연결합니다. (WebRTC P2P / PeerJS)
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Title -->
       <section id="titleOv" class="overlay" style="display:block;cursor:pointer">
         <div class="ctr">
@@ -123,33 +84,94 @@
         </div>
       </section>
 
-      <!-- Mode (하위 모드 슬라이드) -->
+      <!-- Mode (로컬/온라인 탭 + 하위 모드 슬라이드) -->
       <section id="modeOv" class="overlay">
         <div class="ctr" style="gap:14px">
-          <h2 style="margin:0 0 6px;font-size:30px">모드 선택</h2>
-          <div class="modes">
-            <div class="mode" data-mode="aiai" id="cardAIAI">
-              <h3>AI vs AI</h3>
-              <div class="small">양쪽 모두 ONNX(실패 시 휴리스틱)</div>
-              <div class="sub" id="subAIAI">
-                <div class="sub-inner">
-                  <div class="chip" data-variant="duel"  data-parent="aiai">1대1</div>
-                  <div class="chip" data-variant="quad"  data-parent="aiai">쿼드라퐁(정사각 4인)</div>
+          <div class="tabs">
+            <button id="tabLocal" class="tab on">로컬 모드</button>
+            <button id="tabOnline" class="tab">온라인 모드</button>
+          </div>
+
+          <!-- 로컬 모드 카드 -->
+          <div id="localBlock" style="display:block">
+            <h2 style="margin:0 0 6px;font-size:30px">로컬 모드</h2>
+            <div class="modes">
+              <div class="mode" data-mode="aiai" id="cardAIAI">
+                <h3>AI vs AI</h3>
+                <div class="small">양쪽 모두 ONNX(실패 시 휴리스틱)</div>
+                <div class="sub" id="subAIAI">
+                  <div class="sub-inner">
+                    <div class="chip" data-variant="duel"  data-parent="aiai">1대1</div>
+                    <div class="chip" data-variant="quad"  data-parent="aiai">쿼드라퐁(정사각 4인)</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mode" data-mode="aip" id="cardAIP">
+                <h3>AI vs 플레이어</h3>
+                <div class="small">플레이어: 오른쪽(↑/↓)</div>
+                <div class="sub" id="subAIP">
+                  <div class="sub-inner">
+                    <div class="chip" data-variant="duel"  data-parent="aip">1대1</div>
+                    <div class="chip" data-variant="quad"  data-parent="aip">쿼드라퐁(정사각 4인 · 1명만 플레이어)</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mode" data-mode="pvp" id="cardPVP">
+                <h3>Player vs Player</h3>
+                <div class="small">왼쪽: W/S · 오른쪽: ↑/↓</div>
+                <div class="sub" id="subPVP">
+                  <div class="sub-inner">
+                    <div class="chip" data-variant="duel"  data-parent="pvp">1대1</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="mode" data-mode="aip" id="cardAIP">
-              <h3>AI vs 플레이어</h3>
-              <div class="small">오른쪽: ↑/↓ 또는 W/S (플레이어)</div>
-              <div class="sub" id="subAIP">
-                <div class="sub-inner">
-                  <div class="chip" data-variant="duel"  data-parent="aip">1대1</div>
-                  <div class="chip" data-variant="quad"  data-parent="aip">쿼드라퐁(정사각 4인 • 1명만 플레이어)</div>
+            <div class="small" style="text-align:center;margin-top:6px">일시정지 P · 재시작 R</div>
+          </div>
+
+          <!-- 온라인 모드 카드 + P2P 패널(타이틀/모드에 배치) -->
+          <div id="onlineBlock" style="display:none">
+            <h2 style="margin:0 0 6px;font-size:30px">온라인 모드 (P2P)</h2>
+            <div class="modes">
+              <div class="mode">
+                <h3>1대1 PvP (원격)</h3>
+                <div class="small">호스트=왼쪽(WS), 게스트=오른쪽(↑/↓)</div>
+              </div>
+            </div>
+
+            <div class="multi-panel">
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <div class="seg" role="tablist">
+                  <button id="tabHost" class="on">호스트</button>
+                  <button id="tabJoin">참여</button>
+                </div>
+
+                <!-- 호스트 UI -->
+                <div id="hostUI" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <input id="hostName" class="input" placeholder="내 닉네임" maxlength="16" style="min-width:150px"/>
+                  <button id="btnHostGo" class="btn alt">코드 생성</button>
+                  <div id="hostInfo" class="pill" style="display:none">상태: 대기</div>
+                  <div id="hostCode" class="pill" style="display:none">코드: ——</div>
+                  <button id="btnCopy" class="btn ghost" style="display:none">코드 복사</button>
+                  <button id="btnStart" class="btn" disabled>게임 시작</button>
+                </div>
+
+                <!-- 참여 UI -->
+                <div id="joinUI" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+                  <input id="joinName" class="input" placeholder="내 닉네임" maxlength="16" style="min-width:150px"/>
+                  <input id="joinCode" class="input" placeholder="참여용 6자리 코드" maxlength="6"/>
+                  <button id="btnJoinGo" class="btn alt">연결</button>
+                  <div id="joinInfo" class="pill">상태: 대기</div>
+                </div>
+
+                <div style="width:100%;color:#9eaad0;font-size:12px;margin-top:6px">
+                  6자리 코드를 공유하고 접속하세요. (WebRTC P2P / PeerJS · 공개 TURN 포함)
                 </div>
               </div>
             </div>
           </div>
-          <div class="small">일시정지 P · 재시작 R</div>
         </div>
       </section>
 
@@ -172,7 +194,7 @@
 <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
-/* ======= Constants (하이퍼 속도 & 연출) ======= */
+/* ======= Constants / FX ======= */
 const W=800,H=600,PW=12,PH=88,BR=8;
 const PAD_SPEED=480;
 const B_INIT=420, B_MAX=1300;
@@ -198,15 +220,10 @@ const S={
 
 /* ======= Helpers ======= */
 function show(el,on){ el.style.display=on?'block':'none'; }
-function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function rr(x,y,w,h,r,c){ const rr=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr); ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.fillStyle=c; ctx.fill(); }
 function circle(x,y,r,c){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.closePath(); ctx.fillStyle=c; ctx.fill(); }
-function bg(){
-  ctx.clearRect(0,0,W,H);
-  const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#0D1434'); g.addColorStop(1,'#0A0F25');
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  if(S.modeVariant==='duel'){ ctx.fillStyle='rgba(90,110,170,.45)'; for(let y=0;y<H;y+=26) ctx.fillRect(W/2-2,y,4,13); }
-}
+function bg(){ ctx.clearRect(0,0,W,H); const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#0D1434'); g.addColorStop(1,'#0A0F25'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); if(S.modeVariant==='duel'){ ctx.fillStyle='rgba(90,110,170,.45)'; for(let y=0;y<H;y+=26) ctx.fillRect(W/2-2,y,4,13); } }
 function fmt(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
 const speed=b=>Math.hypot(b.vx,b.vy);
 const setSpeedDir=(b,sp,ang)=>{ b.vx=Math.cos(ang)*sp; b.vy=Math.sin(ang)*sp; };
@@ -225,31 +242,33 @@ addEventListener('keyup',e=>Keys.set(e.code,false));
 /* ======= Title → Mode ======= */
 titleOv.addEventListener('click',()=>{ if(S.scene==='title'){ show(titleOv,false); show(modeOv,true); S.scene='mode'; }});
 
-/* ======= 하위 모드 슬라이드 UI ======= */
-const cardAIAI=document.getElementById('cardAIAI');
-const cardAIP=document.getElementById('cardAIP');
+/* ======= 모드 탭 전환(로컬/온라인) ======= */
+const tabLocal=document.getElementById('tabLocal'), tabOnline=document.getElementById('tabOnline');
+const localBlock=document.getElementById('localBlock'), onlineBlock=document.getElementById('onlineBlock');
+tabLocal.onclick=()=>{ tabLocal.classList.add('on'); tabOnline.classList.remove('on'); localBlock.style.display='block'; onlineBlock.style.display='none'; };
+tabOnline.onclick=()=>{ tabOnline.classList.add('on'); tabLocal.classList.remove('on'); localBlock.style.display='none'; onlineBlock.style.display='block'; };
+
+/* ======= 로컬 하위 모드 슬라이드 ======= */
 const subAIAI=document.getElementById('subAIAI');
 const subAIP=document.getElementById('subAIP');
-function toggleSub(sub){
-  [subAIAI, subAIP].forEach(s=>{ if(s===sub){ s.style.maxHeight=(s.style.maxHeight&&s.style.maxHeight!=='0px')?'0px':'120px'; } else s.style.maxHeight='0px'; });
-}
-cardAIAI.addEventListener('click', (e)=>{ if(e.target.classList.contains('chip')) return; toggleSub(subAIAI); });
-cardAIP.addEventListener('click',  (e)=>{ if(e.target.classList.contains('chip')) return; toggleSub(subAIP); });
+const subPVP=document.getElementById('subPVP');
+function toggleSub(sub){ [subAIAI,subAIP,subPVP].forEach(s=>{ s.style.maxHeight=(s===sub && s.style.maxHeight!=='120px')?'120px':'0px'; }); }
+document.getElementById('cardAIAI').addEventListener('click',e=>{ if(!e.target.classList.contains('chip')) toggleSub(subAIAI); });
+document.getElementById('cardAIP').addEventListener('click', e=>{ if(!e.target.classList.contains('chip')) toggleSub(subAIP); });
+document.getElementById('cardPVP').addEventListener('click', e=>{ if(!e.target.classList.contains('chip')) toggleSub(subPVP); });
 document.querySelectorAll('.chip').forEach(ch=>{
   ch.addEventListener('click', ()=>{
     const parent=ch.dataset.parent, variant=ch.dataset.variant;
-    S.modeVariant=variant; S.mode=parent;
-    show(modeOv,false); show(postOv,false); show(titleOv,false);
-    startMode(parent, variant);
+    startMode(parent, variant); show(modeOv,false); show(titleOv,false); show(postOv,false);
   });
 });
 
-/* ======= Buttons ======= */
+/* ======= Top Buttons ======= */
 document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(modeOv,false); show(postOv,false); };
 document.getElementById('btnReset').onclick=()=> resetRound();
 document.getElementById('btnPause').onclick=()=> S.paused=!S.paused;
 
-/* ======= ONNX AI (옵션) ======= */
+/* ======= ONNX AI ======= */
 let ortSession=null, aiReady=false;
 (async()=>{ try{ aiTxt.textContent='AI: loading…'; aiDot.className='dot';
   ortSession=await ort.InferenceSession.create('model.onnx',{executionProviders:['wasm']});
@@ -263,7 +282,7 @@ async function aiActRight(py,oy){ if(!aiReady||!ortSession) return (S.ball.y<py-
 /* ======= Paddles / Modes ======= */
 function makePaddle(side,color,upKey,downKey,aiSide){ return {x:0,y:H/2, color, upKey, downKey, aiSide, trail:[], isHuman:false}; }
 
-/* 정사각형 아레나 파라미터 */
+/* QUAD arena */
 const QUAD={ size:520, padLong:110, padThick:12, marginX:0, marginY:0 };
 function layoutQuad(){ const s=Math.floor(Math.min(W,H)*0.82); QUAD.size=s; QUAD.padLong=Math.floor(s*0.18); QUAD.padThick=12; QUAD.marginX=Math.floor((W-s)/2); QUAD.marginY=Math.floor((H-s)/2); }
 
@@ -281,22 +300,21 @@ function startMode(mode, variant='duel'){
       S.R.push(makePaddle('R', COLORS.R, null, null, 'R'));
     }else if(mode==='aip'){
       S.L.push(makePaddle('L', COLORS.L, null, null, 'L'));
-      const p=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null);
-      p.upKey2='KeyW'; p.downKey2='KeyS'; p.isHuman=true; S.R.push(p);
-    }else{ // pvp (로컬)
+      const p=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null); // 한 명만 플레이어(오른쪽, 방향키)
+      p.isHuman=true; S.R.push(p);
+    }else if(mode==='pvp'){ // 로컬 1v1 : 왼쪽=WS, 오른쪽=↑/↓
       const Lp=makePaddle('L', COLORS.L, 'KeyW','KeyS', null); Lp.isHuman=true;
-      const Rp=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null); Rp.upKey2='KeyW'; Rp.downKey2='KeyS'; Rp.isHuman=true;
+      const Rp=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null); Rp.isHuman=true;
       S.L.push(Lp); S.R.push(Rp);
     }
   }else{ // quad
     const Lp=makePaddle('L', COLORS.L, null, null, 'L');
-    const Rp=makePaddle('R', COLORS.R, null, null, (mode==='aiai'?'R': null));
-    if(mode==='aip'){ Rp.upKey='ArrowUp'; Rp.downKey='ArrowDown'; Rp.upKey2='KeyW'; Rp.downKey2='KeyS'; Rp.isHuman=true; }
+    const Rp=makePaddle('R', COLORS.R, null, null, (mode==='aiai'?'R':null));
+    if(mode==='aip'){ Rp.upKey='ArrowUp'; Rp.downKey='ArrowDown'; Rp.isHuman=true; }
     const Tp={x:W/2,y:QUAD.marginY+QUAD.padThick/2,color:'#41C9B8',aiSide:'T',trail:[]};
     const Bp={x:W/2,y:QUAD.marginY+QUAD.size-QUAD.padThick/2,color:'#FFC857',aiSide:'B',trail:[]};
     S.L.push(Lp); S.R.push(Rp); S.T.push(Tp); S.B.push(Bp);
   }
-  show(modeOv,false); show(titleOv,false); show(postOv,false);
 }
 
 /* ======= Physics & Collisions ======= */
@@ -374,12 +392,11 @@ function draw(dt){
   drawSpeedLines(); drawFlameTrail();
   if(S.modeVariant==='duel'){ if(S.L[0]) drawPaddleTrail(S.L[0],'L'); if(S.R[0]) drawPaddleTrail(S.R[0],'R'); }
   else { if(S.L[0]) drawPaddleTrail(S.L[0],'L'); if(S.R[0]) drawPaddleTrail(S.R[0],'R'); if(S.T[0]) drawPaddleTrail(S.T[0],'T'); if(S.B[0]) drawPaddleTrail(S.B[0],'B'); }
-  if(S.modeVariant==='duel'){ for(const p of S.L){ rr(26, p.y-PH/2, PW, PH, 6, COLORS.L); } if(S.R[0]) rr(W-26-PW, S.R[0].y-PH/2, PW, PH, 6, COLORS.R); if(S.mode==='aip' && S.R[0]?.isHuman){ ctx.fillStyle='#ffffff'; ctx.font='bold 12px Inter,system-ui'; ctx.textAlign='left'; ctx.fillText('YOU', W-26-PW-34, S.R[0].y-PH/2-8); } }
+  if(S.modeVariant==='duel'){ for(const p of S.L){ rr(26, p.y-PH/2, PW, PH, 6, COLORS.L); } if(S.R[0]) rr(W-26-PW, S.R[0].y-PH/2, PW, PH, 6, COLORS.R); }
   else { if(S.L[0]) rr(QUAD.marginX-QUAD.padThick, S.L[0].y-QUAD.padLong/2, QUAD.padThick, QUAD.padLong, 6, COLORS.L);
          if(S.R[0]) rr(QUAD.marginX+QUAD.size, S.R[0].y-QUAD.padLong/2, QUAD.padThick, QUAD.padLong, 6, COLORS.R);
          if(S.T[0]) rr(S.T[0].x-QUAD.padLong/2, QUAD.marginY-QUAD.padThick, QUAD.padLong, QUAD.padThick, 6, '#41C9B8');
-         if(S.B[0]) rr(S.B[0].x-QUAD.padLong/2, QUAD.marginY+QUAD.size, QUAD.padLong, QUAD.padThick, 6, '#FFC857');
-         if(S.mode==='aip' && S.R[0]?.isHuman){ ctx.fillStyle='#ffffff'; ctx.font='bold 12px Inter,system-ui'; ctx.textAlign='left'; ctx.fillText('YOU', QUAD.marginX+QUAD.size+QUAD.padThick+6, S.R[0].y-QUAD.padLong/2-6); } }
+         if(S.B[0]) rr(S.B[0].x-QUAD.padLong/2, QUAD.marginY+QUAD.size, QUAD.padLong, QUAD.padThick, 6, '#FFC857'); }
   circle(S.ball.x,S.ball.y,BR,'#101420'); circle(S.ball.x,S.ball.y,BR-2,'#1b2238'); circle(S.ball.x,S.ball.y,BR-3,'#FFC857');
   drawSparks();
   ctx.fillStyle='#DCE6FF'; ctx.font='bold 28px Inter,system-ui';
@@ -397,19 +414,30 @@ async function loop(now=performance.now()){
   const isGuestOnline = (NET.active && !NET.isHost && NET.ingame);
 
   if(S.scene==='play' && !S.paused){
-    if(!isGuestOnline){ // 게스트 온라인은 물리스킵(호스트 상태만 반영)
+    if(!isGuestOnline){ // 게스트 온라인은 물리 비활성(호스트 동기 수신만)
       if(S.modeVariant==='duel'){
-        if(S.L[0]){ let act=1; if(S.L[0].aiSide==='L') act=await aiActLeft(S.L[0].y, S.R[0]?.y??H/2); else if(NET.active && NET.isHost && S.L[0].isHuman){ // 온라인 호스트 왼쪽 W/S
-          const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1;
-        } applyVertical(S.L[0], act); if(Math.random()<.6) pushPaddleTrail('L'); }
+        // L
+        if(S.L[0]){ let act=1;
+          if(S.mode==='pvp' && NET.active && NET.isHost){ // 온라인 호스트: 왼쪽=WS
+            const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1;
+          }else if(S.L[0].aiSide==='L'){ act=await aiActLeft(S.L[0].y, S.R[0]?.y??H/2); }
+          else if(S.mode==='pvp'){ // 로컬 PVP: 왼쪽=WS
+            const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1;
+          }
+          applyVertical(S.L[0], act); if(Math.random()<.6) pushPaddleTrail('L');
+        }
+        // R
         if(S.R[0]){ let act=1;
-          if(S.R[0].isHuman && !(NET.active && NET.isHost)){ // 로컬 또는 게스트(게스트는 입력만 전송하고 물리 스킵이므로 여기 안탐)
-            const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?true:false; const dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?true:false; act=up&&!dn?0:dn&&!up?2:1;
-          } else if(S.R[0].aiSide==='R'){ act=await aiActRight(S.R[0].y, S.L[0]?.y??H/2); }
-          if(!(NET.active && NET.isHost && S.R[0].isHuman)) applyVertical(S.R[0], act); // 호스트는 R은 게스트 입력으로 별도 처리
+          if(S.mode==='pvp'){ // 로컬 PVP: 오른쪽=Arrow 전용 (WS 무시)
+            const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown'); act=up&&!dn?0:dn&&!up?2:1;
+          }else if(S.R[0].isHuman && !(NET.active && NET.isHost)){ // 로컬 AIP 등
+            const up=(Keys.get('ArrowUp'))?true:false; const dn=(Keys.get('ArrowDown'))?true:false; act=up&&!dn?0:dn&&!up?2:1;
+          }else if(S.R[0].aiSide==='R'){ act=await aiActRight(S.R[0].y, S.L[0]?.y??H/2); }
+          if(!(NET.active && NET.isHost && S.mode==='pvp')) applyVertical(S.R[0], act); // 호스트 PVP 온라인은 게스트 입력으로 별도 적용
           if(Math.random()<.6) pushPaddleTrail('R');
         }
-        // 호스트 또는 로컬에서만 볼 이동/판정
+
+        // 호스트/로컬만 공 이동 및 판정
         S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
         if(S.ball.y<=BR||S.ball.y>=H-BR){
           S.ball.y=S.ball.y<=BR?BR:H-BR; S.ball.vy=S.ball.y===BR?Math.abs(S.ball.vy):-Math.abs(S.ball.vy);
@@ -418,13 +446,14 @@ async function loop(now=performance.now()){
         }
         if(S.ball.vx<0){ const p=S.L[0]; if(p){ const Lr={x:26,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Lr.x,Lr.y,Lr.w,Lr.h)) bounce(true,p.y); }}
         else{ const p=S.R[0]; if(p){ const Rr={x:W-26-PW,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Rr.x,Rr.y,Rr.w,Rr.h)) bounce(false,p.y); }}
+
         let scored=null; if(S.ball.x<-BR){S.sR++; S.rallyRight=true; scored='RIGHT';} if(S.ball.x>W+BR){S.sL++; S.rallyRight=false; scored='LEFT';}
         if(scored){ spawnScorePop(scored==='LEFT'?'LEFT +1':'RIGHT +1'); screenShake(12); resetRound(); }
         spawnSpeedLines(S.ball.vx,S.ball.vy); updateSparks(dt); updateSpeedLines(dt);
       } else {
-        // quad (로컬/호스트만 물리)
+        // QUAD (로컬 전용)
         if(S.L[0]){ let act=1; const ty=S.ball.y; act=(ty<S.L[0].y-4)?0:(ty>S.L[0].y+4)?2:1; applyVertical(S.L[0], act); if(Math.random()<.6) pushPaddleTrail('L'); }
-        if(S.R[0]){ let act=1; if(S.R[0].isHuman){ const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?true:false; const dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?true:false; act=up&&!dn?0:dn&&!up?2:1; } else { const ty=S.ball.y; act=(ty<S.R[0].y-4)?0:(ty>S.R[0].y+4)?2:1; } applyVertical(S.R[0], act); if(Math.random()<.6) pushPaddleTrail('R'); }
+        if(S.R[0]){ let act=1; if(S.R[0].isHuman){ const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown'); act=up&&!dn?0:dn&&!up?2:1; } else { const ty=S.ball.y; act=(ty<S.R[0].y-4)?0:(ty>S.R[0].y+4)?2:1; } applyVertical(S.R[0], act); if(Math.random()<.6) pushPaddleTrail('R'); }
         if(S.T[0]){ let act=1; const tx=S.ball.x; act=(tx<S.T[0].x-4)?0:(tx>S.T[0].x+4)?2:1; applyHorizontal(S.T[0], act); if(Math.random()<.6) pushPaddleTrail('T'); }
         if(S.B[0]){ let act=1; const tx=S.ball.x; act=(tx<S.B[0].x-4)?0:(tx>S.B[0].x+4)?2:1; applyHorizontal(S.B[0], act); if(Math.random()<.6) pushPaddleTrail('B'); }
         S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
@@ -450,17 +479,12 @@ async function loop(now=performance.now()){
     if(S.run){ S.t=Math.max(0,S.t-dt); timeEl.textContent=fmt(S.t); if(S.t===0) endMatch(); }
   }
 
-  // 호스트: 상태 브로드캐스트(30Hz)
-  if(NET.active && NET.isHost && S.scene==='play'){
+  // 호스트: 온라인 PvP 상태 브로드캐스트(30Hz)
+  if(NET.active && NET.isHost && NET.ingame && S.scene==='play' && S.mode==='pvp' && S.modeVariant==='duel'){
     _stateTick+=dt;
     if(_stateTick>=1/30){
       _stateTick=0;
-      const payload={
-        type:'state',
-        s:{ ball:S.ball, sL:S.sL, sR:S.sR, t:S.t,
-            L:S.L[0]?.y ?? null, R:S.R[0]?.y ?? null,
-            mode:S.mode, variant:S.modeVariant }
-      };
+      const payload={ type:'state', s:{ ball:S.ball, sL:S.sL, sR:S.sR, t:S.t, L:S.L[0]?.y ?? null, R:S.R[0]?.y ?? null, mode:S.mode, variant:S.modeVariant } };
       for(const c of NET.conns.values()){ try{c.open && c.send(payload);}catch{} }
     }
   }
@@ -478,7 +502,7 @@ function endMatch(){ S.run=false; show(postOv,true);
     <button class="btn alt" onclick="show(postOv,false); show(modeOv,true);">모드로 돌아가기</button>
   </div>`;}
 
-/* ======================= Multiplayer (PeerJS) ======================= */
+/* ======================= 온라인(PeerJS) ======================= */
 const ICE_SERVERS=[
   {urls:'stun:stun.l.google.com:19302'},
   {urls:'turn:openrelay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
@@ -487,10 +511,8 @@ const ICE_SERVERS=[
 ];
 const PEER_OPTS={ host:'0.peerjs.com', port:443, secure:true, path:'/', debug:1, config:{iceServers:ICE_SERVERS} };
 
-const NET={active:false,isHost:true, roomCode:null, peer:null, conns:new Map(), opened:false, guestAct:1, ready:false, connecting:false, ingame:false};
-const netBadge=document.getElementById('netBadge');
-const multiPanel=document.getElementById('multiPanel'); let panelOpen=false;
-document.getElementById('btnMulti').onclick=()=>{ panelOpen=!panelOpen; multiPanel.style.maxHeight=panelOpen?'200px':'0px'; };
+const NET={active:false,isHost:true, roomCode:null, peer:null, conns:new Map(), opened:false, guestAct:1, connecting:false, ingame:false};
+function makeCode(){ return String(Math.floor(100000+Math.random()*900000)); }
 
 const tabHost=document.getElementById('tabHost'), tabJoin=document.getElementById('tabJoin');
 const hostUI=document.getElementById('hostUI'), joinUI=document.getElementById('joinUI');
@@ -501,14 +523,10 @@ const hostInfo=document.getElementById('hostInfo'), hostCodeEl=document.getEleme
 const btnHostGo=document.getElementById('btnHostGo'), btnJoinGo=document.getElementById('btnJoinGo'), joinInfo=document.getElementById('joinInfo'), joinCode=document.getElementById('joinCode');
 const hostName=document.getElementById('hostName'), joinName=document.getElementById('joinName');
 
-function makeCode(){ return String(Math.floor(100000+Math.random()*900000)); }
-function setBadge(t){ netBadge.textContent=t; }
 function createPeer(id){ return new Promise((res,rej)=>{ const p=new Peer(id,PEER_OPTS); p.on('open',()=>res(p)); p.on('disconnected',()=>p.reconnect()); p.on('error',rej); }); }
 function wireConn(conn){
   conn.on('error',()=>{});
-  conn.on('close',()=>{ for(const [k,v] of NET.conns.entries()) if(v===conn) NET.conns.delete(k);
-    if(NET.isHost){ btnStart.disabled=NET.conns.size<1; hostInfo.textContent=`상태: 연결 ${NET.conns.size}명`; setBadge(NET.conns.size?'호스트 연결됨':'호스트 대기'); }
-  });
+  conn.on('close',()=>{ for(const [k,v] of NET.conns.entries()) if(v===conn) NET.conns.delete(k); btnStart.disabled=NET.conns.size<1; });
 }
 
 /* Host */
@@ -518,8 +536,7 @@ btnHostGo.onclick=async()=>{
     NET.active=true; NET.isHost=true; NET.roomCode=makeCode();
     NET.peer=await createPeer(`PONG-${NET.roomCode}`); NET.opened=true;
     hostInfo.style.display='inline-flex'; hostCodeEl.style.display='inline-flex'; btnCopy.style.display='inline-block';
-    hostInfo.textContent='상태: 대기'; hostCodeEl.textContent=`코드: ${NET.roomCode}`; setBadge('호스트 대기');
-
+    hostInfo.textContent='상태: 대기'; hostCodeEl.textContent=`코드: ${NET.roomCode}`;
     NET.peer.on('connection',(conn)=>{
       if(NET.conns.has(conn.peer)) return;
       wireConn(conn);
@@ -527,7 +544,6 @@ btnHostGo.onclick=async()=>{
         NET.conns.set(conn.peer,conn);
         conn.send({type:'ack', host:(hostName.value||'Host')});
         btnStart.disabled=NET.conns.size<1;
-        hostInfo.textContent=`상태: 연결 ${NET.conns.size}명`; setBadge('호스트 연결됨');
         conn.on('data',msg=>{
           if(msg?.type==='input') NET.guestAct=msg.act|0;
           if(msg?.type==='ping') conn.send({type:'pong'});
@@ -535,34 +551,33 @@ btnHostGo.onclick=async()=>{
       });
     });
   }catch(e){
-    hostInfo.style.display='inline-flex'; hostInfo.textContent='상태: 오류'; setBadge('연결 실패');
+    hostInfo.style.display='inline-flex'; hostInfo.textContent='상태: 오류';
   }finally{ NET.connecting=false; btnHostGo.disabled=false; }
 };
 btnCopy.onclick=()=>{ navigator.clipboard.writeText(NET.roomCode); btnCopy.textContent='복사됨'; setTimeout(()=>btnCopy.textContent='코드 복사',900); };
 
-// 온라인 게임 시작: 항상 PvP 듀얼(왼쪽=호스트 W/S, 오른쪽=게스트 ↑/↓ 또는 W/S)
+// 온라인 시작(항상 pvp/duel)
 btnStart.onclick=()=>{ if(!NET.isHost||NET.conns.size<1) return;
-  const st={ sL:0,sR:0, rallyRight:Math.random()<.5, t:MATCH_SEC,
-    ball:{x:W/2,y:H/2,vx:B_INIT,vy:0}, mode:'pvp', variant:'duel' };
+  const st={ sL:0,sR:0, rallyRight:Math.random()<.5, t:MATCH_SEC, ball:{x:W/2,y:H/2,vx:B_INIT,vy:0}, mode:'pvp', variant:'duel' };
   for(const c of NET.conns.values()){ try{ c.open && c.send({type:'start',state:st, host:(hostName.value||'Host')}); }catch{} }
   applyMatchFromHost(st);
   startMode('pvp','duel');
-  // 온라인에서 입력 역할 부여
+  // 온라인 입력 역할: 호스트=L(WS), 게스트=R(↑↓)
   S.L[0].isHuman=true; S.L[0].upKey='KeyW'; S.L[0].downKey='KeyS';
-  S.R[0].isHuman=true; S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown'; S.R[0].upKey2='KeyW'; S.R[0].downKey2='KeyS';
-  NET.ingame=true; setBadge('호스트 진행중'); show(titleOv,false); show(modeOv,false);
+  S.R[0].isHuman=true; S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown';
+  NET.ingame=true; show(modeOv,false); show(titleOv,false);
 };
 function applyMatchFromHost(st){
   S.sL=st.sL; S.sR=st.sR; S.rallyRight=st.rallyRight; S.t=st.t;
   S.ball.x=st.ball.x; S.ball.y=st.ball.y; S.ball.vx=st.ball.vx; S.ball.vy=st.ball.vy;
+  S.mode=st.mode; S.modeVariant=st.variant;
   S.trail.length=0;
 }
 
 /* Guest */
 btnJoinGo.onclick=async()=>{
   if(NET.connecting) return;
-  const code=(joinCode.value||'').trim();
-  if(code.length!==6){ joinInfo.textContent='상태: 코드 확인'; return; }
+  const code=(joinCode.value||'').trim(); if(code.length!==6){ joinInfo.textContent='상태: 코드 확인'; return; }
   NET.connecting=true; btnJoinGo.disabled=true;
   try{
     NET.active=true; NET.isHost=false;
@@ -572,19 +587,18 @@ btnJoinGo.onclick=async()=>{
     wireConn(conn);
     conn.on('open',()=>{
       NET.conns.set('host',conn);
-      joinInfo.textContent='상태: 연결됨'; setBadge('게스트 연결됨');
+      joinInfo.textContent='상태: 연결됨';
       conn.on('data',(msg)=>{
         if(msg?.type==='ack'){ joinInfo.textContent=`상태: ${msg.host} 초대`; }
         if(msg?.type==='start'){
           applyMatchFromHost(msg.state);
           startMode(msg.state.mode, msg.state.variant);
-          // 게스트는 오른쪽 플레이어 역할
+          // 게스트는 오른쪽 플레이어(Arrow)
           S.L[0].isHuman=false; S.L[0].aiSide='L';
-          S.R[0].isHuman=true;  S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown'; S.R[0].upKey2='KeyW'; S.R[0].downKey2='KeyS';
-          NET.ingame=true; setBadge('게스트 진행중'); show(titleOv,false); show(modeOv,false);
+          S.R[0].isHuman=true;  S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown';
+          NET.ingame=true; show(modeOv,false); show(titleOv=false);
         }
         if(msg?.type==='state'){
-          // 호스트 상태 수신 → 그대로 반영(게스트는 물리 미실행)
           const s=msg.s;
           S.mode=s.mode; S.modeVariant=s.variant;
           S.ball.x=s.ball.x; S.ball.y=s.ball.y; S.ball.vx=s.ball.vx; S.ball.vy=s.ball.vy;
@@ -592,40 +606,30 @@ btnJoinGo.onclick=async()=>{
           if(S.R[0]) S.R[0].y=s.R ?? S.R[0].y;
           S.sL=s.sL; S.sR=s.sR; S.t=s.t;
         }
-        if(msg?.type==='pong'){ /* keepalive OK */ }
+        if(msg?.type==='pong'){ /* keepalive ok */ }
       });
-      // keepalive
       setInterval(()=>{ try{conn.open && conn.send({type:'ping'});}catch{} }, 4000);
     });
   }catch(e){
-    joinInfo.textContent='상태: 실패'; setBadge('연결 실패');
+    joinInfo.textContent='상태: 실패';
   }finally{ NET.connecting=false; btnJoinGo.disabled=false; }
 };
 
-// 게스트 입력 -> 호스트로 전송
+// 게스트 입력 → 호스트
 setInterval(()=>{ if(!NET.active || NET.isHost || !NET.ingame) return;
-  const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?true:false;
-  const dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?true:false;
+  const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown');
   const act=up&&!dn?0:dn&&!up?2:1;
   const h=NET.conns.get('host'); if(h&&h.open) try{h.send({type:'input',act, name:(joinName.value||'Guest')});}catch{}
 }, 50);
 
-// 호스트: 게스트 입력으로 R 패들 적용
+// 호스트: 게스트 입력으로 R패들 조작
 const _origLoop=loop;
 loop = async function(now=performance.now()){
-  if(NET.active && NET.isHost && NET.ingame && S.scene==='play' && !S.paused && S.R[0] && S.R[0].isHuman){
+  if(NET.active && NET.isHost && NET.ingame && S.scene==='play' && !S.paused && S.R[0] && S.mode==='pvp' && S.modeVariant==='duel'){
     applyVertical(S.R[0], NET.guestAct|0);
   }
   return _origLoop(now);
 };
-
-/* UI 초기화 */
-const netBadgeEl=document.getElementById('netBadge');
-multiPanel.style.maxHeight='0px';
-tabHost.click();
-
-/* ONNX 표시 상태 */
-aiDot.className='dot ok'; aiTxt.textContent= aiReady? 'AI: loaded' : 'AI: failed (heuristic)';
 </script>
 </body>
 </html>
