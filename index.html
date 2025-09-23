@@ -30,8 +30,8 @@
     font-weight:800;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25)}
   .btn.alt{background:#2b3fe6} .btn.ghost{background:#0b122e;color:#dfe6ff;border:1px solid #1a2144}
   .overlay{position:absolute;inset:0;border-radius:14px;background:
-    radial-gradient(1200px 600px at 50% -40%, rgba(91,124,255,.14), transparent 60%), rgba(12,16,36,.85);
-    backdrop-filter:blur(6px) saturate(1.1);display:none;z-index:7} /* z-index 높여 깔끔히 가리고 필요시 완전 숨김 */
+    radial-gradient(1200px 600px at 50% -40%, rgba(91,124,255,.14), transparent 60%), rgba(12,16,36,.90);
+    backdrop-filter:blur(6px) saturate(1.1);display:none;z-index:7}
   .ctr{position:absolute;inset:0;display:grid;place-items:center;padding:16px}
   .modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:min(720px,92%)}
   .mode{border-radius:14px;padding:16px;background:linear-gradient(180deg,#0f1638,#0c122e);
@@ -40,17 +40,15 @@
   .small{font-size:12px;color:#9eaad0}
   .vignette{position:absolute;inset:0;border-radius:14px;pointer-events:none;box-shadow:inset 0 0 120px rgba(0,0,0,.55)}
 
-  /* Multi panel */
-  .multi-wrap{position:absolute;left:12px;right:12px;top:12px;z-index:6}
-  .multi-head{display:flex;gap:8px;align-items:center}
-  .multi-panel{overflow:hidden;max-height:0;transition:max-height .35s ease;}
-  .multi-inner{margin-top:8px;padding:12px;border:1px solid #1a2144;border-radius:12px;background:#0d1334}
+  /* Title overlay tabs (오프라인 / 멀티) */
+  .tabs{display:flex;gap:10px;align-items:center;justify-content:center;margin-bottom:18px}
   .seg{display:inline-flex;background:#0b122e;border:1px solid #1a2144;border-radius:10px;overflow:hidden}
-  .seg button{border:0;background:transparent;color:#cfd6ff;padding:8px 12px;font-weight:800;cursor:pointer}
+  .seg button{border:0;background:transparent;color:#cfd6ff;padding:10px 16px;font-weight:800;cursor:pointer}
   .seg button.on{background:#1a2250;color:#fff}
+  .panel{display:none}
+  .panel.on{display:block}
   .pill{display:inline-flex;gap:8px;align-items:center;background:#0f1642;border:1px solid #1a2144;border-radius:999px;padding:6px 12px;font-size:12px;color:#cfd6ff}
   .input{background:#0b122e;border:1px solid #1a2144;color:#eaf0ff;border-radius:10px;padding:10px 12px;min-width:200px;font-weight:700}
-  .spacer{flex:1}
 </style>
 </head>
 <body>
@@ -65,23 +63,41 @@
       <canvas id="cv" width="800" height="600"></canvas>
       <div class="vignette"></div>
 
-      <!-- Multiplayer UI -->
-      <div class="multi-wrap">
-        <div class="multi-head">
-          <button id="btnMulti" class="btn ghost">멀티</button>
-          <div id="netBadge" class="pill">오프라인</div>
-          <div class="spacer"></div>
-        </div>
-        <div id="multiPanel" class="multi-panel">
-          <div class="multi-inner">
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <div class="seg" role="tablist">
-                <button id="tabHost" class="on">호스트</button>
-                <button id="tabJoin">참여</button>
+      <!-- Title (오프라인/멀티를 여기서 모두 처리) -->
+      <section id="titleOv" class="overlay" style="display:block">
+        <div class="ctr">
+          <div style="display:grid;gap:18px;place-items:center;width:min(820px,94%)">
+            <h1 style="margin:0;font-size:62px;letter-spacing:.7rem">P o n g</h1>
+
+            <!-- 탭 -->
+            <div class="tabs">
+              <div class="seg">
+                <button id="tabOffline" class="on">오프라인</button>
+                <button id="tabMulti">멀티</button>
+              </div>
+              <div id="netBadge" class="pill" style="display:none">오프라인</div>
+            </div>
+
+            <!-- 오프라인 패널: 기존 모드 선택 -->
+            <div id="panelOffline" class="panel on" style="width:100%">
+              <div class="modes">
+                <div class="mode" data-mode="aiai"><h3>AI vs AI</h3><div class="small">양쪽 모두 ONNX(실패 시 휴리스틱)</div></div>
+                <div class="mode" data-mode="aip"><h3>AI vs 플레이어</h3><div class="small">오른쪽: ↑/↓ 또는 W/S</div></div>
+              </div>
+              <div class="small" style="text-align:center;margin-top:8px">일시정지 P · 재시작 R</div>
+            </div>
+
+            <!-- 멀티 패널: 호스트/참여 -->
+            <div id="panelMulti" class="panel" style="width:100%">
+              <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+                <div class="seg">
+                  <button id="tabHost" class="on">호스트</button>
+                  <button id="tabJoin">참여</button>
+                </div>
               </div>
 
-              <!-- Host -->
-              <div id="hostUI" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <!-- 호스트 UI -->
+              <div id="hostUI" style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap">
                 <input id="hostName" class="input" placeholder="내 닉네임(호스트)" maxlength="12"/>
                 <button id="btnHostGo" class="btn alt">코드 생성</button>
                 <div id="hostInfo" class="pill" style="display:none">상태: 대기</div>
@@ -90,41 +106,19 @@
                 <button id="btnStart" class="btn" disabled>게임 시작</button>
               </div>
 
-              <!-- Guest -->
-              <div id="joinUI" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+              <!-- 참여 UI -->
+              <div id="joinUI" style="display:none;gap:10px;align-items:center;justify-content:center;margin-top:12px;flex-wrap:wrap">
                 <input id="joinName" class="input" placeholder="내 닉네임(참여자)" maxlength="12"/>
                 <input id="joinCode" class="input" placeholder="참여용 6자리 코드" maxlength="6"/>
                 <button id="btnJoinGo" class="btn alt">연결</button>
                 <div id="joinInfo" class="pill">상태: 대기</div>
               </div>
 
-              <div style="width:100%;color:#9eaad0;font-size:12px;margin-top:6px">
+              <div class="small" style="text-align:center;margin-top:6px">
                 호스트가 생성한 6자리 코드를 공유하고, 참여자는 코드를 입력해 연결합니다. (WebRTC P2P / PeerJS)
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Title -->
-      <section id="titleOv" class="overlay" style="display:block;cursor:pointer">
-        <div class="ctr">
-          <div style="display:grid;gap:18px;place-items:center">
-            <h1 style="margin:0;font-size:62px;letter-spacing:.7rem">P o n g</h1>
-            <div class="small">화면을 클릭하거나 Enter</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Mode -->
-      <section id="modeOv" class="overlay">
-        <div class="ctr" style="gap:14px">
-          <h2 style="margin:0 0 6px;font-size:30px">모드 선택</h2>
-          <div class="modes">
-            <div class="mode" data-mode="aiai"><h3>AI vs AI</h3><div class="small">양쪽 모두 ONNX(실패 시 휴리스틱)</div></div>
-            <div class="mode" data-mode="aip"><h3>AI vs 플레이어</h3><div class="small">오른쪽: ↑/↓ 또는 W/S</div></div>
-          </div>
-          <div class="small">일시정지 P · 재시작 R</div>
         </div>
       </section>
 
@@ -157,8 +151,14 @@ const COLORS={L:'#5B7CFF', R:'#FF6E5A'}, TRAIL_MAX=110;
 /* ======= Canvas / DOM ======= */
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d'); ctx.imageSmoothingEnabled=true;
 const fpsEl=document.getElementById('fps'), aiDot=document.getElementById('aiDot'), aiTxt=document.getElementById('aiTxt');
-const titleOv=document.getElementById('titleOv'), modeOv=document.getElementById('modeOv'), postOv=document.getElementById('postOv'), postInner=document.getElementById('postInner');
+const titleOv=document.getElementById('titleOv'), postOv=document.getElementById('postOv'), postInner=document.getElementById('postInner');
 const timeEl=document.getElementById('time');
+
+/* ======= Title tabs ======= */
+const tabOffline=document.getElementById('tabOffline'), tabMulti=document.getElementById('tabMulti');
+const panelOffline=document.getElementById('panelOffline'), panelMulti=document.getElementById('panelMulti');
+tabOffline.onclick=()=>{ tabOffline.classList.add('on'); tabMulti.classList.remove('on'); panelOffline.classList.add('on'); panelMulti.classList.remove('on'); document.getElementById('netBadge').style.display='none'; };
+tabMulti.onclick =()=>{ tabMulti.classList.add('on'); tabOffline.classList.remove('on'); panelMulti.classList.add('on'); panelOffline.classList.remove('on'); document.getElementById('netBadge').style.display='inline-flex'; };
 
 /* ======= Game State ======= */
 const S={
@@ -171,7 +171,7 @@ const S={
 
 /* ======= Helpers ======= */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function show(el,on){ el.style.display=on?'block':'none'; if(!on) el.style.visibility='hidden'; else el.style.visibility='visible'; } // 완전 숨김
+function show(el,on){ el.style.display=on?'block':'none'; if(!on) el.style.visibility='hidden'; else el.style.visibility='visible'; }
 function rr(x,y,w,h,r,c){ const rr=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+rr,y); ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr); ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath(); ctx.fillStyle=c; ctx.fill(); }
 function circle(x,y,r,c){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.closePath(); ctx.fillStyle=c; ctx.fill(); }
 function bg(){ ctx.clearRect(0,0,W,H); const g=ctx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#0D1434'); g.addColorStop(1,'#0A0F25'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); ctx.fillStyle='rgba(60,80,160,.35)'; for(let y=0;y<H;y+=26) ctx.fillRect(W/2-2,y,4,13); }
@@ -186,18 +186,16 @@ addEventListener('keydown',e=>{
   Keys.set(e.code,true);
   if(e.code==='KeyP') S.paused=!S.paused;
   if(e.code==='KeyR') resetRound();
-  if(S.scene==='title' && (e.code==='Enter'||e.code==='Space')) titleOv.click();
 });
 addEventListener('keyup',e=>Keys.set(e.code,false));
 
-/* ======= Title / Mode ======= */
-titleOv.addEventListener('click',()=>{ if(S.scene==='title'){ show(titleOv,false); show(modeOv,true); S.scene='mode'; }});
+/* ======= Mode tiles ======= */
 document.querySelectorAll('.mode').forEach(m=>{
-  m.onclick=()=>{ S.mode=m.dataset.mode; show(modeOv,false); show(postOv,false); startMode(S.mode); };
+  m.onclick=()=>{ S.mode=m.dataset.mode; show(titleOv,false); show(postOv,false); startMode(S.mode); };
 });
 
 /* ======= Buttons ======= */
-document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(modeOv,false); show(postOv,false); };
+document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(postOv,false); };
 document.getElementById('btnReset').onclick=()=> resetRound();
 document.getElementById('btnPause').onclick=()=> S.paused=!S.paused;
 
@@ -218,16 +216,12 @@ async function aiActRight(py,oy){ if(!aiReady||!ortSession) return (S.ball.y<py-
 /* ======= Paddles / Modes ======= */
 const makePaddle=(side,color,upKey,downKey,aiSide)=>({y:H/2, color, upKey, downKey, aiSide, trail:[]});
 function startMode(mode){
-  // 반드시 오버레이 숨기기 (남아 비치는 문제 방지)
-  show(titleOv,false); show(modeOv,false); show(postOv,false);
-
-  // 상태 리셋
+  show(titleOv,false);
   S.sL=0; S.sR=0; S.t=MATCH_SEC; S.paused=false; S.run=true; S.scene='play';
   S.trail.length=0; S.speedLines.length=0; S.scorePop=null;
   S.ball.x=W/2; S.ball.y=H/2; const a=(Math.random()*0.7-0.35), dir=(S.rallyRight?1:-1);
   S.ball.vx=dir*B_INIT*Math.cos(a); S.ball.vy=B_INIT*Math.sin(a);
 
-  // 패들
   S.L=[]; S.R=[];
   if(mode==='aiai'){
     S.L.push(makePaddle('L', COLORS.L, null, null, 'L'));
@@ -236,7 +230,7 @@ function startMode(mode){
     S.L.push(makePaddle('L', COLORS.L, null, null, 'L'));
     S.R.push(makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null));
     S.R.push(makePaddle('R', COLORS.R, 'KeyW','KeyS', null));
-  }else if(mode==='pvp'){ // 멀티 전용(좌우는 NET.side로 결정)
+  }else if(mode==='pvp'){
     S.L.push(makePaddle('L', COLORS.L, null, null, null));
     S.R.push(makePaddle('R', COLORS.R, null, null, null));
   }else{
@@ -246,11 +240,11 @@ function startMode(mode){
   }
 }
 
-/* ======= Physics & VFX ======= */
+/* ======= Physics & VFX (동일) ======= */
 function apply(p,act){ const d=(act===0?-1:(act===2?1:0))*PAD_SPEED*(1/60); p.y=clamp(p.y+d, PH/2, H-PH/2); }
 function circleRect(cx,cy,cr,rx,ry,rw,rh){ const nx=clamp(cx,rx,rx+rw), ny=clamp(cy,ry,ry+rh), dx=cx-nx, dy=cy-ny; return dx*dx+dy*dy<=cr*cr; }
 function bounce(isLeft, py){
-  const off=clamp((S.ball.y-py)/(PH/2),-1,1), cur=speed(S.ball), sp=Math.min(B_MAX,cur*GROW_HIT), ang=off*ANG_MAX, dir=isLeft?1:-1;
+  const off=clamp((S.ball.y-py)/(PH/2),-1,1), cur=Math.hypot(S.ball.vx,S.ball.vy), sp=Math.min(B_MAX,cur*GROW_HIT), ang=off*ANG_MAX, dir=isLeft?1:-1;
   S.ball.vx=dir*sp*Math.cos(ang); S.ball.vy=sp*Math.sin(ang);
   S.ball.x+=dir*(PW/2+BR+2); S.ball.y+=(Math.random()*4-2);
   screenShake(8*Math.min(1, sp/B_MAX)); spawnHitSpark(S.ball.x - dir*8, S.ball.y, dir); pushPaddleTrail(isLeft?'L':'R');
@@ -300,58 +294,39 @@ async function loop(now=performance.now()){
   fpsA+=dt; fpsN++; if(fpsA>=.5){ fpsEl.textContent=Math.round(fpsN/fpsA)+' fps'; fpsA=0; fpsN=0; }
 
   if(S.scene==='play' && !S.paused){
-    // 좌측
+    // 좌
     if(S.L[0]){
       let act=1;
-      if(NET.active && NET.side==='R' && NET.authority==='host'){  // 게스트가 우측이면 좌측은 호스트/AI
-        act = await aiActLeft(S.L[0].y, S.R[0]?.y??H/2);
-      }else if(S.mode==='aiai' || S.L[0].aiSide==='L'){
-        act = await aiActLeft(S.L[0].y, S.R[0]?.y??H/2);
-      }else if(S.mode==='pvp' && NET.side==='L'){ // 내가 좌측
-        const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?1:0, dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?1:0;
-        act = up&&!dn?0:dn&&!up?2:1;
-      }
-      apply(S.L[0], act);
-      if(Math.random()<.6) pushPaddleTrail('L');
+      if(NET.active && NET.isHost && NET.side==='R'){ act = await aiActLeft(S.L[0].y, S.R[0]?.y??H/2); }
+      else if(S.mode==='aiai' || S.L[0].aiSide==='L'){ act = await aiActLeft(S.L[0].y, S.R[0]?.y??H/2); }
+      else if(S.mode==='pvp' && NET.side==='L'){ const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?1:0, dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?1:0; act=up&&!dn?0:dn&&!up?2:1; }
+      apply(S.L[0],act); if(Math.random()<.6) pushPaddleTrail('L');
     }
-
-    // 우측
+    // 우
     if(S.R[0]){
       let act=1;
-      if(S.mode==='aiai' || S.R[0].aiSide==='R'){
-        act = await aiActRight(S.R[0].y, S.L[0]?.y??H/2);
-      }else if(S.mode==='aip'){
-        const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?1:0, dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?1:0;
-        act = up&&!dn?0:dn&&!up?2:1;
-      }else if(S.mode==='pvp' && NET.side==='R'){
-        const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?1:0, dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?1:0;
-        act = up&&!dn?0:dn&&!up?2:1;
-      }
-      apply(S.R[0], act);
-      if(Math.random()<.6) pushPaddleTrail('R');
+      if(S.mode==='aiai' || S.R[0].aiSide==='R'){ act=await aiActRight(S.R[0].y, S.L[0]?.y??H/2); }
+      else if(S.mode==='aip'){ const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?1:0, dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?1:0; act=up&&!dn?0:dn&&!up?2:1; }
+      else if(S.mode==='pvp' && NET.side==='R'){ const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?1:0, dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?1:0; act=up&&!dn?0:dn&&!up?2:1; }
+      apply(S.R[0],act); if(Math.random()<.6) pushPaddleTrail('R');
     }
-
     // 물리
     S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
     if(S.ball.y<=BR||S.ball.y>=H-BR){
-      S.ball.y = S.ball.y<=BR?BR:H-BR;
-      S.ball.vy = S.ball.y===BR?Math.abs(S.ball.vy):-Math.abs(S.ball.vy);
-      const cur=speed(S.ball), sp=Math.min(B_MAX, cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang);
+      S.ball.y=S.ball.y<=BR?BR:H-BR;
+      S.ball.vy=S.ball.y===BR?Math.abs(S.ball.vy):-Math.abs(S.ball.vy);
+      const cur=speed(S.ball), sp=Math.min(B_MAX,cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang);
       screenShake(4); spawnSpeedLines(S.ball.vx,S.ball.vy);
     }
-    // 패들 충돌
     if(S.ball.vx<0){ const p=S.L[0]; if(p){ const L={x:26,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,L.x,L.y,L.w,L.h)) bounce(true,p.y); } }
     else{ const p=S.R[0]; if(p){ const Rr={x:W-26-PW,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Rr.x,Rr.y,Rr.w,Rr.h)) bounce(false,p.y); } }
-
-    // 득점
     let scored=null; if(S.ball.x<-BR){S.sR++; S.rallyRight=true; scored='RIGHT';} if(S.ball.x>W+BR){S.sL++; S.rallyRight=false; scored='LEFT';}
     if(scored){ spawnScorePop(scored==='LEFT'?`${S.names.left} +1`:`${S.names.right} +1`); screenShake(12); resetRound(); }
-
     spawnSpeedLines(S.ball.vx,S.ball.vy); updateSparks(dt); updateSpeedLines(dt);
     if(S.run){ S.t=Math.max(0,S.t-dt); timeEl.textContent=fmt(S.t); if(S.t===0) endMatch(); }
   }
 
-  // 멀티: 호스트가 상태 브로드캐스트 / 게스트는 호스트 상태 적용
+  // 멀티 네트워크 프레임
   NET.tick(dt);
 
   draw(dt); requestAnimationFrame(loop);
@@ -363,192 +338,108 @@ function endMatch(){ S.run=false; show(postOv,true);
   postInner.innerHTML=`<div style="display:grid;gap:12px;place-items:center">
     <div style="font-size:40px;font-weight:900">경기 종료</div>
     <div style="font-weight:900">${S.sL} : ${S.sR}</div>
-    <button class="btn alt" onclick="show(postOv,false); show(modeOv,true); S.scene='mode';">모드로 돌아가기</button>
+    <button class="btn alt" onclick="show(postOv,false); show(titleOv,true); S.scene='title';">타이틀로</button>
   </div>`;
 }
 
 /* ======================= Multiplayer (PeerJS) ======================= */
 const netBadge=document.getElementById('netBadge');
-const multiPanel=document.getElementById('multiPanel'); let panelOpen=false;
-document.getElementById('btnMulti').onclick=()=>{ panelOpen=!panelOpen; multiPanel.style.maxHeight=panelOpen?'220px':'0px'; };
+const hostName=document.getElementById('hostName'), joinName=document.getElementById('joinName');
+const hostInfo=document.getElementById('hostInfo'), hostCodeEl=document.getElementById('hostCode'), btnCopy=document.getElementById('btnCopy'), btnStart=document.getElementById('btnStart');
+const btnHostGo=document.getElementById('btnHostGo'), btnJoinGo=document.getElementById('btnJoinGo'), joinInfo=document.getElementById('joinInfo'), joinCode=document.getElementById('joinCode');
 const tabHost=document.getElementById('tabHost'), tabJoin=document.getElementById('tabJoin');
 const hostUI=document.getElementById('hostUI'), joinUI=document.getElementById('joinUI');
 tabHost.onclick=()=>{ tabHost.classList.add('on'); tabJoin.classList.remove('on'); hostUI.style.display='flex'; joinUI.style.display='none'; };
 tabJoin.onclick=()=>{ tabJoin.classList.add('on'); tabHost.classList.remove('on'); hostUI.style.display='none'; joinUI.style.display='flex'; };
 
-const hostName=document.getElementById('hostName');
-const joinName=document.getElementById('joinName');
-const hostInfo=document.getElementById('hostInfo'), hostCodeEl=document.getElementById('hostCode'), btnCopy=document.getElementById('btnCopy'), btnStart=document.getElementById('btnStart');
-const btnHostGo=document.getElementById('btnHostGo'), btnJoinGo=document.getElementById('btnJoinGo'), joinInfo=document.getElementById('joinInfo'), joinCode=document.getElementById('joinCode');
-
 const NET = {
-  active:false,
-  isHost:false,
-  side:null,            // 'L' or 'R'
-  authority:null,       // 'host' or 'none' (게스트)
-  roomCode:null,
-  peer:null,
-  conn:null,
-  sending:false,
-  started:false,
-  lastSend:0,
-  preventJoinClick:false,
-  preventHostClick:false,
-
+  active:false,isHost:false,side:null,authority:null,roomCode:null,peer:null,conn:null,
+  lastSend:0, started:false, preventJoinClick:false, preventHostClick:false,
   setBadge(t){ netBadge.textContent=t; },
-
   makeCode(){ return String(Math.floor(100000+Math.random()*900000)); },
-
-  async createPeer(id){
-    return new Promise((res,rej)=>{
-      const p=new Peer(id,{debug:1,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}});
-      p.on('open',()=>res(p)); p.on('error',e=>rej(e));
-    });
-  },
-
-  // called every frame
+  async createPeer(id){ return new Promise((res,rej)=>{ const p=new Peer(id,{debug:1,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}}); p.on('open',()=>res(p)); p.on('error',e=>rej(e));}); },
   tick(dt){
     if(!this.active) return;
-    // 호스트는 30Hz로 상태 전송
-    if(this.isHost && this.conn && this.conn.open){
-      this.lastSend+=dt;
-      if(this.lastSend>=1/30){
-        this.lastSend=0;
-        try{
-          this.conn.send({type:'state', sL:S.sL, sR:S.sR, t:S.t, rally:S.rallyRight,
-            L: S.L[0]?.y ?? H/2, R: S.R[0]?.y ?? H/2,
-            ball:{x:S.ball.x,y:S.ball.y,vx:S.ball.vx,vy:S.ball.vy}
-          });
-        }catch{}
+    if(this.isHost && this.conn && this.conn.open && S.scene==='play'){
+      this.lastSend+=dt; if(this.lastSend>=1/30){ this.lastSend=0;
+        try{ this.conn.send({type:'state', sL:S.sL, sR:S.sR, t:S.t, rally:S.rallyRight, L:S.L[0]?.y??H/2, R:S.R[0]?.y??H/2, ball:{x:S.ball.x,y:S.ball.y,vx:S.ball.vx,vy:S.ball.vy}});}catch{}
       }
     }
   }
 };
 
-/* UI: 초기 상태 */
-multiPanel.style.maxHeight='0px';
-tabHost.click();
-
-/* Host Flow */
+/* Host */
 btnHostGo.onclick=async()=>{
-  if(NET.preventHostClick) return;
-  NET.preventHostClick=true;
-
-  NET.isHost=true; NET.authority='host'; NET.active=true;
-  NET.roomCode=NET.makeCode();
-  NET.peer=await NET.createPeer(`PONG-${NET.roomCode}`);
-
+  if(NET.preventHostClick) return; NET.preventHostClick=true;
+  NET.isHost=true; NET.authority='host'; NET.active=true; document.getElementById('netBadge').style.display='inline-flex';
+  NET.roomCode=NET.makeCode(); NET.peer=await NET.createPeer(`PONG-${NET.roomCode}`);
   hostInfo.style.display='inline-flex'; hostCodeEl.style.display='inline-flex'; btnCopy.style.display='inline-block';
   hostInfo.textContent='상태: 대기'; hostCodeEl.textContent=`코드: ${NET.roomCode}`; NET.setBadge('호스트 대기');
 
   NET.peer.on('connection',(conn)=>{
-    if(NET.conn){ // 이미 연결되어 있으면 거절
-      try{ conn.close(); }catch{}
-      return;
-    }
+    if(NET.conn){ try{conn.close();}catch{} return; }
     NET.conn=conn;
     conn.on('open',()=>{
-      NET.setBadge('호스트 연결됨');
-      hostInfo.textContent='상태: 1명 연결';
-      btnStart.disabled=false;
+      NET.setBadge('호스트 연결됨'); hostInfo.textContent='상태: 1명 연결'; btnStart.disabled=false;
       const myNick=(hostName.value||'HOST').slice(0,12);
-      conn.send({type:'hello', host:myNick});
+      try{ conn.send({type:'hello', host:myNick}); }catch{}
       conn.on('data',msg=>{
         if(msg?.type==='hello'){ S.names.right=(msg.nick||'GUEST').slice(0,12); S.names.left=(hostName.value||'HOST').slice(0,12); }
-        if(msg?.type==='input'){ // 게스트 입력 → 우측 패들
-          if(S.R[0]) apply(S.R[0], msg.act|0);
-        }
+        if(msg?.type==='input' && S.mode==='pvp' && S.R[0]){ apply(S.R[0], msg.act|0); }
       });
     });
-    conn.on('close',()=>{ btnStart.disabled=true; hostInfo.textContent='상태: 연결 끊김'; NET.setBadge('호스트 대기'); NET.conn=null; });
+    conn.on('close',()=>{ btnStart.disabled=true; hostInfo.textContent='상태: 연결 끊김'; NET.setBadge('호스트 대기'); NET.conn=null; NET.started=false; });
   });
 
-  NET.setBadge('코드 생성됨');
   NET.preventHostClick=false;
 };
-
 btnCopy.onclick=()=>{ if(!NET.roomCode) return; navigator.clipboard.writeText(NET.roomCode); btnCopy.textContent='복사됨'; setTimeout(()=>btnCopy.textContent='코드 복사',900); };
-
 btnStart.onclick=()=>{
   if(!NET.isHost || !NET.conn || !NET.conn.open || NET.started) return;
   NET.started=true;
-
-  // 랜덤으로 좌/우 배정 (게스트가 좌측/우측 중 하나)
   const guestSide = Math.random()<.5 ? 'L' : 'R';
   const hostSide  = guestSide==='L' ? 'R' : 'L';
   NET.side = hostSide;
-
-  // 이름 적용
   S.names.left  = guestSide==='L' ? (S.names.left||'GUEST') : (hostName.value||'HOST');
   S.names.right = guestSide==='R' ? (S.names.right||'GUEST') : (hostName.value||'HOST');
-
-  // 시작 패킷
-  const st={ type:'start',
-    assign:{guest:guestSide, host:hostSide},
-    names:{ host:(hostName.value||'HOST').slice(0,12), guest:(S.names.right||'GUEST').slice(0,12) },
-    seed:Math.floor(Math.random()*1e9)
-  };
-  try{ NET.conn.send(st);}catch{}
-
-  // 호스트는 PVP 모드로 시작
-  S.rallyRight=Math.random()<.5;
-  startMode('pvp');
-  NET.setBadge('호스트 진행중');
+  try{ NET.conn.send({ type:'start', assign:{guest:guestSide, host:hostSide}, names:{ host:(hostName.value||'HOST').slice(0,12), guest:(S.names.right||'GUEST').slice(0,12) } }); }catch{}
+  S.rallyRight=Math.random()<.5; S.mode='pvp'; startMode('pvp'); NET.setBadge('호스트 진행중');
+  // 타이틀 사라지게
+  show(titleOv,false);
 };
 
-/* Guest Flow */
+/* Guest */
 btnJoinGo.onclick=async()=>{
-  if(NET.preventJoinClick) return;
-  NET.preventJoinClick=true;
-
-  const code=(joinCode.value||'').trim();
-  if(code.length!==6){ joinInfo.textContent='상태: 코드 확인'; NET.preventJoinClick=false; return; }
-
-  NET.isHost=false; NET.authority='none'; NET.active=true;
+  if(NET.preventJoinClick) return; NET.preventJoinClick=true;
+  const code=(joinCode.value||'').trim(); if(code.length!==6){ joinInfo.textContent='상태: 코드 확인'; NET.preventJoinClick=false; return; }
+  NET.isHost=false; NET.authority='none'; NET.active=true; document.getElementById('netBadge').style.display='inline-flex';
   NET.peer=await NET.createPeer(`PONG-G-${NET.makeCode()}`);
-  const conn=NET.peer.connect(`PONG-${code}`,{reliable:true});
-  NET.conn=conn;
-
-  conn.on('open',()=>{
-    joinInfo.textContent='상태: 연결됨'; NET.setBadge('게스트 연결됨');
-    const myNick=(joinName.value||'GUEST').slice(0,12);
-    try{ conn.send({type:'hello', nick:myNick}); }catch{}
-    S.names.right=myNick; // 임시
-  });
-
+  const conn=NET.peer.connect(`PONG-${code}`,{reliable:true}); NET.conn=conn;
+  conn.on('open',()=>{ joinInfo.textContent='상태: 연결됨'; NET.setBadge('게스트 연결됨'); const myNick=(joinName.value||'GUEST').slice(0,12); try{ conn.send({type:'hello', nick:myNick}); }catch{} S.names.right=myNick; });
   conn.on('data',(msg)=>{
     if(msg?.type==='hello'){ S.names.left=(msg.host||'HOST').slice(0,12); }
     if(msg?.type==='start'){
-      // 좌우 배정 + 이름 수신
-      NET.side = msg.assign.guest; // 나는 게스트
+      NET.side=msg.assign.guest;
       S.names.left  = msg.assign.guest==='L' ? (joinName.value||'GUEST') : (msg.names.host||'HOST');
       S.names.right = msg.assign.guest==='R' ? (joinName.value||'GUEST') : (msg.names.host||'HOST');
-      // 시작
-      startMode('pvp');
-      NET.setBadge('게스트 진행중');
+      S.mode='pvp'; startMode('pvp'); NET.setBadge('게스트 진행중');
+      show(titleOv,false);
     }
     if(msg?.type==='state'){
-      // 호스트 권위 상태 적용
       S.sL=msg.sL; S.sR=msg.sR; S.t=msg.t; S.rallyRight=msg.rally;
-      if(S.L[0]) S.L[0].y = msg.L;
-      if(S.R[0]) S.R[0].y = msg.R;
+      if(S.L[0]) S.L[0].y=msg.L; if(S.R[0]) S.R[0].y=msg.R;
       S.ball.x=msg.ball.x; S.ball.y=msg.ball.y; S.ball.vx=msg.ball.vx; S.ball.vy=msg.ball.vy;
     }
   });
-
-  conn.on('close',()=>{ joinInfo.textContent='상태: 끊김'; NET.setBadge('게스트 대기'); });
-
+  conn.on('close',()=>{ joinInfo.textContent='상태: 끊김'; NET.setBadge('게스트 대기'); NET.started=false; });
   NET.preventJoinClick=false;
 };
-
-/* Guest → 입력 송신 (50ms) */
-setInterval(()=>{
-  if(!NET.active || NET.isHost || !NET.conn || !NET.conn.open || S.scene!=='play') return;
+/* Guest inputs → host */
+setInterval(()=>{ if(!NET.active || NET.isHost || !NET.conn || !NET.conn.open || S.scene!=='play') return;
   const up=(Keys.get('ArrowUp')||Keys.get('KeyW'))?true:false;
   const dn=(Keys.get('ArrowDown')||Keys.get('KeyS'))?true:false;
   const act=up&&!dn?0:dn&&!up?2:1;
-  try{ NET.conn.send({type:'input', act}); }catch{}
-}, 50);
+  try{ NET.conn.send({type:'input', act}); }catch{} }, 50);
 </script>
 </body>
 </html>
