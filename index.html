@@ -60,6 +60,10 @@
   .sub-inner{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
   .chip{padding:10px 14px;border-radius:10px;background:#16205a;color:#fff;border:1px solid #1a2144;cursor:pointer;font-weight:800}
   .chip:hover{background:#21307a}
+
+  /* 로컬 기믹 선택 */
+  .gimmick{display:flex;gap:8px;align-items:center;justify-content:center;margin:6px 0 12px}
+  .gimmick .seg button{min-width:92px}
 </style>
 </head>
 <body>
@@ -95,6 +99,20 @@
           <!-- 로컬 모드 카드 -->
           <div id="localBlock" style="display:block">
             <h2 style="margin:0 0 6px;font-size:30px">로컬 모드</h2>
+
+            <!-- 기믹 선택 (Classic / Polar / Time Rally / Gateball / Beat) -->
+            <div class="gimmick">
+              <span class="small">기믹:</span>
+              <div class="seg" role="tablist">
+                <button id="gNone"  class="on">Classic</button>
+                <button id="gPolar">Polar</button>
+                <button id="gTime">Time&nbsp;Rally</button>
+                <button id="gGate">Gateball</button>
+                <button id="gBeat">Beat</button>
+              </div>
+              <span id="gHint" class="small" style="margin-left:8px">Q/E로 극성 토글 (Polar)</span>
+            </div>
+
             <div class="modes">
               <div class="mode" data-mode="aiai" id="cardAIAI">
                 <h3>AI vs AI</h3>
@@ -102,7 +120,6 @@
                 <div class="sub" id="subAIAI">
                   <div class="sub-inner">
                     <div class="chip" data-variant="duel"  data-parent="aiai">1대1</div>
-                    <div class="chip" data-variant="quad"  data-parent="aiai">쿼드라퐁(정사각 4인)</div>
                   </div>
                 </div>
               </div>
@@ -113,7 +130,6 @@
                 <div class="sub" id="subAIP">
                   <div class="sub-inner">
                     <div class="chip" data-variant="duel"  data-parent="aip">1대1</div>
-                    <div class="chip" data-variant="quad"  data-parent="aip">쿼드라퐁(정사각 4인 · 1명만 플레이어)</div>
                   </div>
                 </div>
               </div>
@@ -131,7 +147,7 @@
             <div class="small" style="text-align:center;margin-top:6px">일시정지 P · 재시작 R</div>
           </div>
 
-          <!-- 온라인 모드 카드 + P2P 패널(타이틀/모드에 배치) -->
+          <!-- 온라인 모드 카드 + P2P 패널 -->
           <div id="onlineBlock" style="display:none">
             <h2 style="margin:0 0 6px;font-size:30px">온라인 모드 (P2P)</h2>
             <div class="modes">
@@ -218,6 +234,20 @@ const S={
   L:[], R:[], T:[], B:[], trail:[], speedLines:[], shake:0, scorePop:null
 };
 
+/* ======= Local Gimmicks ======= */
+const G={
+  kind:'none', // 'none'|'polar'|'time'|'gate'|'beat'
+  // Polar
+  polL:1, polR:-1, tint:0,
+  // Time Rally
+  hist:[], echo:0,
+  // Gateball
+  portalA:null, portalB:null, wells:[], pT:0,
+  // Beat
+  bpm:120, period:0.5, time:0, window:0.150, combo:0, lastGood:false
+};
+G.period=60/G.bpm;
+
 /* ======= Helpers ======= */
 function show(el,on){ el.style.display=on?'block':'none'; }
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -228,6 +258,7 @@ function fmt(t){ const m=Math.floor(t/60), s=Math.floor(t%60); return `${String(
 const speed=b=>Math.hypot(b.vx,b.vy);
 const setSpeedDir=(b,sp,ang)=>{ b.vx=Math.cos(ang)*sp; b.vy=Math.sin(ang)*sp; };
 const screenShake=p=>{ S.shake=Math.max(S.shake,p); };
+const ballPolar=()=> S.ball.vx>=0?1:-1;
 
 /* ======= Input ======= */
 const Keys=new Map();
@@ -236,6 +267,12 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyP') S.paused=!S.paused;
   if(e.code==='KeyR') resetRound();
   if(S.scene==='title' && (e.code==='Enter'||e.code==='Space')) titleOv.click();
+
+  // Polar toggles
+  if(G.kind==='polar'){
+    if(e.code==='KeyQ') { G.polL*=-1; G.tint=1; }
+    if(e.code==='KeyE') { G.polR*=-1; G.tint=1; }
+  }
 });
 addEventListener('keyup',e=>Keys.set(e.code,false));
 
@@ -247,6 +284,29 @@ const tabLocal=document.getElementById('tabLocal'), tabOnline=document.getElemen
 const localBlock=document.getElementById('localBlock'), onlineBlock=document.getElementById('onlineBlock');
 tabLocal.onclick=()=>{ tabLocal.classList.add('on'); tabOnline.classList.remove('on'); localBlock.style.display='block'; onlineBlock.style.display='none'; };
 tabOnline.onclick=()=>{ tabOnline.classList.add('on'); tabLocal.classList.remove('on'); localBlock.style.display='none'; onlineBlock.style.display='block'; };
+
+/* ======= 로컬 기믹 UI ======= */
+const gHint=document.getElementById('gHint');
+const gBtns={
+  none:document.getElementById('gNone'),
+  polar:document.getElementById('gPolar'),
+  time:document.getElementById('gTime'),
+  gate:document.getElementById('gGate'),
+  beat:document.getElementById('gBeat'),
+};
+Object.entries(gBtns).forEach(([k,btn])=>{
+  btn.onclick=()=>{
+    Object.values(gBtns).forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    G.kind=(k==='none'?'none':k);
+    if(G.kind==='polar') gHint.textContent='Q/E로 극성 토글 (Polar)';
+    else if(G.kind==='beat') gHint.textContent='비트 윈도(±150ms) 패링 시 강화';
+    else if(G.kind==='time') gHint.textContent='히트 시 소확률 타임슬립';
+    else if(G.kind==='gate') gHint.textContent='포탈/중력 우물 등장';
+    else gHint.textContent='기믹 없음';
+  };
+});
+gBtns.none.classList.add('on');
 
 /* ======= 로컬 하위 모드 슬라이드 ======= */
 const subAIAI=document.getElementById('subAIAI');
@@ -263,8 +323,8 @@ document.querySelectorAll('.chip').forEach(ch=>{
   });
 });
 
-/* ======= Top Buttons ======= */
-document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(modeOv,false); show(postOv,false); };
+/* ======= Buttons ======= */
+document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(modeOv=false); show(postOv,false); };
 document.getElementById('btnReset').onclick=()=> resetRound();
 document.getElementById('btnPause').onclick=()=> S.paused=!S.paused;
 
@@ -282,12 +342,12 @@ async function aiActRight(py,oy){ if(!aiReady||!ortSession) return (S.ball.y<py-
 /* ======= Paddles / Modes ======= */
 function makePaddle(side,color,upKey,downKey,aiSide){ return {x:0,y:H/2, color, upKey, downKey, aiSide, trail:[], isHuman:false}; }
 
-/* QUAD arena */
-const QUAD={ size:520, padLong:110, padThick:12, marginX:0, marginY:0 };
-function layoutQuad(){ const s=Math.floor(Math.min(W,H)*0.82); QUAD.size=s; QUAD.padLong=Math.floor(s*0.18); QUAD.padThick=12; QUAD.marginX=Math.floor((W-s)/2); QUAD.marginY=Math.floor((H-s)/2); }
-
 function startMode(mode, variant='duel'){
-  S.mode=mode; S.modeVariant=variant; if(variant==='quad') layoutQuad();
+  // reset gimmick runtime states
+  G.hist.length=0; G.echo=0; G.pT=0; if(G.kind==='gate') spawnGate();
+  G.combo=0; G.time=0; G.lastGood=false; G.tint=0;
+
+  S.mode=mode; S.modeVariant=variant;
   S.sL=0; S.sR=0; S.t=MATCH_SEC; S.paused=false; S.run=true; S.scene='play';
   S.trail.length=0; S.speedLines.length=0; S.scorePop=null;
   S.ball.x=W/2; S.ball.y=H/2; const a=(Math.random()*0.7-0.35), dir=(S.rallyRight?1:-1);
@@ -300,37 +360,57 @@ function startMode(mode, variant='duel'){
       S.R.push(makePaddle('R', COLORS.R, null, null, 'R'));
     }else if(mode==='aip'){
       S.L.push(makePaddle('L', COLORS.L, null, null, 'L'));
-      const p=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null); // 한 명만 플레이어(오른쪽, 방향키)
-      p.isHuman=true; S.R.push(p);
-    }else if(mode==='pvp'){ // 로컬 1v1 : 왼쪽=WS, 오른쪽=↑/↓
+      const p=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null); p.isHuman=true; S.R.push(p);
+    }else if(mode==='pvp'){
       const Lp=makePaddle('L', COLORS.L, 'KeyW','KeyS', null); Lp.isHuman=true;
       const Rp=makePaddle('R', COLORS.R, 'ArrowUp','ArrowDown', null); Rp.isHuman=true;
       S.L.push(Lp); S.R.push(Rp);
     }
-  }else{ // quad
-    const Lp=makePaddle('L', COLORS.L, null, null, 'L');
-    const Rp=makePaddle('R', COLORS.R, null, null, (mode==='aiai'?'R':null));
-    if(mode==='aip'){ Rp.upKey='ArrowUp'; Rp.downKey='ArrowDown'; Rp.isHuman=true; }
-    const Tp={x:W/2,y:QUAD.marginY+QUAD.padThick/2,color:'#41C9B8',aiSide:'T',trail:[]};
-    const Bp={x:W/2,y:QUAD.marginY+QUAD.size-QUAD.padThick/2,color:'#FFC857',aiSide:'B',trail:[]};
-    S.L.push(Lp); S.R.push(Rp); S.T.push(Tp); S.B.push(Bp);
   }
 }
 
 /* ======= Physics & Collisions ======= */
-function applyVertical(p, act){ const d=(act===0?-1:(act===2?1:0))*PAD_SPEED*(1/60);
-  const minY=(S.modeVariant==='quad')?(QUAD.marginY+QUAD.padLong/2):(PH/2);
-  const maxY=(S.modeVariant==='quad')?(QUAD.marginY+QUAD.size-QUAD.padLong/2):(H-PH/2);
-  p.y=clamp(p.y+d, minY, maxY); }
-function applyHorizontal(p, act){ const d=(act===0?-1:(act===2?1:0))*PAD_SPEED*(1/60);
-  const minX=QUAD.marginX+QUAD.padLong/2, maxX=QUAD.marginX+QUAD.size-QUAD.padLong/2;
-  p.x=clamp((p.x||W/2)+d, minX, maxX); }
+function applyVertical(p, act){
+  const d=(act===0?-1:(act===2?1:0))*PAD_SPEED*(1/60);
+  p.y=clamp(p.y+d, PH/2, H-PH/2);
+}
 function circleRect(cx,cy,cr,rx,ry,rw,rh){ const nx=clamp(cx,rx,rx+rw), ny=clamp(cy,ry,ry+rh); const dx=cx-nx, dy=cy-ny; return dx*dx+dy*dy<=cr*cr; }
+
+function polarAdjust(isLeft, sp, ang){
+  const pol = isLeft? G.polL : G.polR;
+  const bp  = ballPolar();
+  if(pol===bp){ sp*=1.10; ang*=0.7; G.tint=Math.min(1,G.tint+0.6); }
+  else{ sp*=0.90; ang*=1.15; ang += (Math.random()*0.16-0.08); G.tint=Math.min(1,G.tint+0.35); }
+  return [sp, ang];
+}
+
+function tryTimeslip(){
+  if(G.kind!=='time'||G.hist.length<6) return;
+  if(Math.random()<0.12){
+    const back = Math.floor((0.3+Math.random()*0.3)/ (1/60));
+    const idx = G.hist.length-back-1;
+    if(idx>=0){
+      const h=G.hist[idx]; S.ball.x=h.x; S.ball.y=h.y; S.ball.vx*=0.98; S.ball.vy*=0.98; G.echo=0.3; screenShake(10);
+    }
+  }
+}
 
 function bounce(isLeft, py){
   const off=clamp((S.ball.y-py)/(PH/2),-1,1);
-  const cur=speed(S.ball), sp=Math.min(B_MAX, cur*GROW_HIT);
-  const ang=off*ANG_MAX, dir=isLeft?1:-1;
+  let cur=speed(S.ball), sp=Math.min(B_MAX, cur*GROW_HIT);
+  let ang=off*ANG_MAX, dir=isLeft?1:-1;
+
+  if(G.kind==='polar') [sp,ang]=polarAdjust(isLeft, sp, ang);
+
+  // Beat timing
+  if(G.kind==='beat'){
+    const t=G.time % G.period; const dist=Math.min(t, G.period-t);
+    const good = dist<=G.window;
+    G.lastGood=good;
+    if(good){ sp=Math.min(B_MAX, sp*(1.08+Math.min(0.12,G.combo*0.02))); G.combo++; screenShake(10); }
+    else G.combo=0;
+  }
+
   S.ball.vx=dir*sp*Math.cos(ang); S.ball.vy=sp*Math.sin(ang);
   S.ball.x+=dir*(PW/2+BR+2); S.ball.y+=(Math.random()*4-2);
   screenShake(8*Math.min(1, sp/B_MAX));
@@ -338,39 +418,22 @@ function bounce(isLeft, py){
   pushPaddleTrail(isLeft?'L':'R');
   for(let i=0;i<6;i++) S.trail.unshift({x:S.ball.x - dir*i*4, y:S.ball.y+(Math.random()*6-3), heat:1, r:BR+(i%2)});
   if(S.trail.length>TRAIL_MAX) S.trail.length=TRAIL_MAX;
+
+  if(G.kind==='time') tryTimeslip();
 }
-function bounceHorizontal(isTop, px){
-  const off=clamp((S.ball.x - px)/(QUAD.padLong/2), -1, 1);
-  const cur=speed(S.ball), sp=Math.min(B_MAX, cur*GROW_HIT);
-  const base=isTop?Math.PI/2:-Math.PI/2;
-  const ang=base + off*ANG_MAX; setSpeedDir(S.ball, sp, ang);
-  S.ball.y += (isTop?1:-1)*(QUAD.padThick/2 + BR + 2); S.ball.x += (Math.random()*4-2);
-  screenShake(8*Math.min(1, sp/B_MAX));
-  spawnHitSpark(S.ball.x, S.ball.y + (isTop?8:-8), isTop?1:-1);
-}
+
 function resetRound(){
   S.trail.length=0; S.speedLines.length=0; S.scorePop=null;
-  if(S.modeVariant==='duel'){ S.L.forEach(p=>{p.y=H/2; p.trail.length=0;}); S.R.forEach(p=>{p.y=H/2; p.trail.length=0;}); }
-  else{ S.L[0].y=H/2; S.R[0].y=H/2; S.T[0].x=W/2; S.B[0].x=W/2; S.L[0].trail.length=0; S.R[0].trail.length=0; }
+  S.L.forEach(p=>{p.y=H/2; p.trail.length=0;}); S.R.forEach(p=>{p.y=H/2; p.trail.length=0;});
   S.ball.x=W/2; S.ball.y=H/2; const a=(Math.random()*0.7-0.35), dir=(S.rallyRight?1:-1);
   S.ball.vx=dir*B_INIT*Math.cos(a); S.ball.vy=B_INIT*Math.sin(a);
+  G.echo=0; G.hist.length=0;
 }
 
 /* ======= VFX ======= */
 function pushPaddleTrail(side){
-  let arr; if(side==='L') arr=S.L[0]?.trail; else if(side==='R') arr=S.R[0]?.trail; else if(side==='T') arr=S.T[0]?.trail; else if(side==='B') arr=S.B[0]?.trail;
-  if(!arr) return;
-  if(side==='T'||side==='B') arr.unshift({x:(side==='T'?S.T[0].x:S.B[0].x), a:1}); else arr.unshift({y:(side==='L'?S.L[0].y:S.R[0].y), a:1});
-  if(arr.length>12) arr.length=12;
-}
-function drawPaddleTrail(p, side){
-  for(let i=0;i<p.trail.length;i++){
-    const t=p.trail[i]; const a=(1 - i/p.trail.length)*0.25; ctx.fillStyle=`rgba(255,255,255,${a*0.08})`;
-    if(side==='L') rr(26, (t.y??p.y)-PH/2, PW, PH, 6, ctx.fillStyle);
-    else if(side==='R') rr(W-26-PW, (t.y??p.y)-PH/2, PW, PH, 6, ctx.fillStyle);
-    else if(side==='T'){ const x=(t.x??p.x) - QUAD.padLong/2, y=QUAD.marginY-QUAD.padThick; rr(x, y, QUAD.padLong, QUAD.padThick, 6, ctx.fillStyle); }
-    else if(side==='B'){ const x=(t.x??p.x) - QUAD.padLong/2, y=QUAD.marginY+QUAD.size; rr(x, y, QUAD.padLong, QUAD.padThick, 6, ctx.fillStyle); }
-  }
+  let arr; if(side==='L') arr=S.L[0]?.trail; else arr=S.R[0]?.trail;
+  if(!arr) return; arr.unshift({y:(side==='L'?S.L[0].y:S.R[0].y), a:1}); if(arr.length>12) arr.length=12;
 }
 const sparks=[];
 function spawnHitSpark(x,y,dir){ for(let i=0;i<10;i++){ const ang=(Math.random()*0.9-0.45)+(dir>0?0:Math.PI); const spd=220+Math.random()*420; sparks.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:.25,age:0}); } }
@@ -380,28 +443,96 @@ function spawnSpeedLines(vx,vy){ const sp=Math.hypot(vx,vy), n=Math.floor(clamp(
 function updateSpeedLines(dt){ for(let i=S.speedLines.length-1;i>=0;i--){ const l=S.speedLines[i]; l.age+=dt; l.x-=Math.cos(l.ang)*S.ball.vx*dt*0.2; l.y-=Math.sin(l.ang)*S.ball.vy*dt*0.2; if(l.age>=l.life) S.speedLines.splice(i,1); } }
 function drawSpeedLines(){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(120,180,255,.45)'; ctx.lineWidth=2; for(const l of S.speedLines){ const t=1 - l.age/l.life, dx=Math.cos(l.ang)*l.len*t, dy=Math.sin(l.ang)*l.len*t; ctx.beginPath(); ctx.moveTo(l.x,l.y); ctx.lineTo(l.x-dx,l.y-dy); ctx.stroke(); } ctx.restore(); }
 function drawFlameTrail(){ const sp=speed(S.ball), heat=clamp((sp-B_INIT)/(B_MAX-B_INIT),0,1); const trailLen=Math.floor(6+heat*32); S.trail.unshift({x:S.ball.x,y:S.ball.y,heat,r:BR}); if(S.trail.length>TRAIL_MAX) S.trail.length=TRAIL_MAX; ctx.save(); ctx.globalCompositeOperation='lighter'; for(let i=0;i<Math.min(trailLen,S.trail.length); i++){ const p=S.trail[i], t=i/trailLen, a=(1-t)*(0.13+0.58*heat), r=p.r*(1+0.95*(1-t)*(0.3+0.7*heat)); const grad=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,r*2.2); grad.addColorStop(0,`rgba(255,70,30,${a*0.7})`); grad.addColorStop(1,`rgba(255,160,60,${a*0.22})`); ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(p.x,p.y,r*2.2,0,Math.PI*2); ctx.fill(); ctx.fillStyle=`rgba(255,210,80,${a})`; ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(2,r*0.6),0,Math.PI*2); ctx.fill(); } const a0=0.26+0.5*heat, r0=BR*(2.5+2.3*heat); const g0=ctx.createRadialGradient(S.ball.x,S.ball.y,0,S.ball.x,S.ball.y,r0); g0.addColorStop(0,`rgba(255,220,100,${a0})`); g0.addColorStop(1,`rgba(255,120,40,0)`); ctx.fillStyle=g0; ctx.beginPath(); ctx.arc(S.ball.x,S.ball.y,r0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
-function spawnScorePop(text){ S.scorePop={text,age:0,life:.9}; }
-function drawScorePop(dt){ if(!S.scorePop) return; const p=S.scorePop; p.age+=dt; const t=Math.min(1,p.age/p.life), y=H*0.3-30*t, a=(1-t); ctx.save(); ctx.globalAlpha=a; ctx.fillStyle='#EAF0FF'; ctx.font='900 44px Inter,system-ui'; ctx.textAlign='center'; ctx.fillText(p.text, W/2, y); ctx.restore(); if(p.age>=p.life) S.scorePop=null; }
+
+/* ======= Gateball helpers ======= */
+function spawnGate(){
+  G.portalA=[ 200+Math.random()*120, 160+Math.random()*280, 22 ];
+  G.portalB=[ 520+Math.random()*120, 160+Math.random()*280, 22 ];
+  G.wells=[];
+  if(Math.random()<0.7) G.wells.push([W*0.5, H*0.35, 12000]);
+  if(Math.random()<0.4) G.wells.push([W*0.5, H*0.65, 9000]);
+  G.pT=0;
+}
+function gateAccel(dt){
+  let ax=0, ay=0;
+  for(const w of G.wells){
+    const dx=w[0]-S.ball.x, dy=w[1]-S.ball.y, d2=dx*dx+dy*dy+1e-3;
+    const inv=w[2]/d2; ax+=dx*inv*dt; ay+=dy*inv*dt;
+  }
+  S.ball.vx+=ax*0.03; S.ball.vy+=ay*0.03;
+}
+function tryPortal(){
+  if(!G.portalA||!G.portalB) return;
+  const inA = (S.ball.x-G.portalA[0])**2 + (S.ball.y-G.portalA[1])**2 <= (G.portalA[2]+BR)**2;
+  const inB = (S.ball.x-G.portalB[0])**2 + (S.ball.y-G.portalB[1])**2 <= (G.portalB[2]+BR)**2;
+  if(inA||inB){
+    const dst = inA? G.portalB : G.portalA;
+    const ang=Math.atan2(S.ball.vy,S.ball.vx)+(Math.random()*0.3-0.15);
+    const sp=speed(S.ball);
+    S.ball.x=dst[0]; S.ball.y=dst[1];
+    S.ball.vx=Math.cos(ang)*sp; S.ball.vy=Math.sin(ang)*sp;
+    screenShake(9);
+  }
+  // 8~12초마다 리롤
+  if(G.pT> (8+Math.random()*4)) spawnGate();
+}
 
 /* ======= Render & Loop ======= */
-function drawArenaQuad(){ ctx.strokeStyle='rgba(140,160,220,.28)'; ctx.lineWidth=2; ctx.strokeRect(QUAD.marginX, QUAD.marginY, QUAD.size, QUAD.size); ctx.fillStyle='rgba(100,130,220,.22)'; for(let x=QUAD.marginX; x<=QUAD.marginX+QUAD.size; x+=28) ctx.fillRect(x, H/2-1, 14, 2); for(let y=QUAD.marginY; y<=QUAD.marginY+QUAD.size; y+=28) ctx.fillRect(W/2-1, y, 2, 14); }
 function draw(dt){
   let ox=0,oy=0; if(S.shake>0){ ox=(Math.random()*2-1)*S.shake; oy=(Math.random()*2-1)*S.shake; S.shake*=0.85; if(S.shake<0.2) S.shake=0; }
   ctx.save(); ctx.translate(ox,oy);
-  bg(); if(S.modeVariant==='quad') drawArenaQuad();
+  bg();
+
+  // Gateball décor
+  if(G.kind==='gate'){
+    // grid
+    ctx.fillStyle='rgba(30,44,88,.6)';
+    for(let x=0;x<W;x+=28) ctx.fillRect(x,H/2-1,14,2);
+    for(let y=0;y<H;y+=28) ctx.fillRect(W/2-1,y,2,14);
+    // portals
+    if(G.portalA){ ctx.beginPath(); ctx.arc(G.portalA[0],G.portalA[1],G.portalA[2],0,Math.PI*2); ctx.strokeStyle='rgba(120,200,255,.9)'; ctx.lineWidth=3; ctx.stroke(); }
+    if(G.portalB){ ctx.beginPath(); ctx.arc(G.portalB[0],G.portalB[1],G.portalB[2],0,Math.PI*2); ctx.strokeStyle='rgba(255,160,120,.9)'; ctx.lineWidth=3; ctx.stroke(); }
+    // wells
+    ctx.fillStyle='rgba(110,140,255,.9)';
+    for(const w of G.wells) circle(w[0],w[1],6,ctx.fillStyle);
+  }
+
+  // Polar frame tint
+  if(G.kind==='polar' && G.tint>0){
+    const c = ballPolar()>0 ? 'rgba(90,150,255,'+ (0.35*G.tint) +')' : 'rgba(255,110,90,'+(0.35*G.tint)+')';
+    ctx.save(); ctx.strokeStyle=c; ctx.lineWidth=10; ctx.strokeRect(5,5,W-10,H-10); ctx.restore();
+    G.tint=Math.max(0,G.tint- dt*1.2);
+  }
+
+  // Time Rally echo border
+  if(G.kind==='time' && G.echo>0){
+    ctx.save(); ctx.strokeStyle='rgba(180,220,255,'+(0.4*Math.min(1,G.echo/0.3))+')'; ctx.lineWidth=3; ctx.strokeRect(6,6,W-12,H-12); ctx.restore();
+  }
+
   drawSpeedLines(); drawFlameTrail();
-  if(S.modeVariant==='duel'){ if(S.L[0]) drawPaddleTrail(S.L[0],'L'); if(S.R[0]) drawPaddleTrail(S.R[0],'R'); }
-  else { if(S.L[0]) drawPaddleTrail(S.L[0],'L'); if(S.R[0]) drawPaddleTrail(S.R[0],'R'); if(S.T[0]) drawPaddleTrail(S.T[0],'T'); if(S.B[0]) drawPaddleTrail(S.B[0],'B'); }
-  if(S.modeVariant==='duel'){ for(const p of S.L){ rr(26, p.y-PH/2, PW, PH, 6, COLORS.L); } if(S.R[0]) rr(W-26-PW, S.R[0].y-PH/2, PW, PH, 6, COLORS.R); }
-  else { if(S.L[0]) rr(QUAD.marginX-QUAD.padThick, S.L[0].y-QUAD.padLong/2, QUAD.padThick, QUAD.padLong, 6, COLORS.L);
-         if(S.R[0]) rr(QUAD.marginX+QUAD.size, S.R[0].y-QUAD.padLong/2, QUAD.padThick, QUAD.padLong, 6, COLORS.R);
-         if(S.T[0]) rr(S.T[0].x-QUAD.padLong/2, QUAD.marginY-QUAD.padThick, QUAD.padLong, QUAD.padThick, 6, '#41C9B8');
-         if(S.B[0]) rr(S.B[0].x-QUAD.padLong/2, QUAD.marginY+QUAD.size, QUAD.padLong, QUAD.padThick, 6, '#FFC857'); }
+
+  // paddle trails
+  if(S.L[0]) drawPaddleTrail(S.L[0],'L'); if(S.R[0]) drawPaddleTrail(S.R[0],'R');
+
+  // paddles
+  if(S.L[0]) rr(26, S.L[0].y-PH/2, PW, PH, 6, COLORS.L);
+  if(S.R[0]) rr(W-26-PW, S.R[0].y-PH/2, PW, PH, 6, COLORS.R);
+
+  // ball
   circle(S.ball.x,S.ball.y,BR,'#101420'); circle(S.ball.x,S.ball.y,BR-2,'#1b2238'); circle(S.ball.x,S.ball.y,BR-3,'#FFC857');
   drawSparks();
+
+  // HUD
   ctx.fillStyle='#DCE6FF'; ctx.font='bold 28px Inter,system-ui';
   ctx.textAlign='right'; ctx.fillText(String(S.sL), W*0.5-60,40);
   ctx.textAlign='left'; ctx.fillText(String(S.sR), W*0.5+60,40);
+
+  // Beat combo
+  if(G.kind==='beat' && G.combo>0){
+    ctx.fillStyle='#FFEFB4'; ctx.font='bold 16px Inter,system-ui'; ctx.textAlign='center';
+    ctx.fillText('COMBO x'+G.combo, W/2, 58);
+  }
+
   ctx.restore();
   drawScorePop(dt);
 }
@@ -414,72 +545,61 @@ async function loop(now=performance.now()){
   const isGuestOnline = (NET.active && !NET.isHost && NET.ingame);
 
   if(S.scene==='play' && !S.paused){
-    if(!isGuestOnline){ // 게스트 온라인은 물리 비활성(호스트 동기 수신만)
-      if(S.modeVariant==='duel'){
-        // L
-        if(S.L[0]){ let act=1;
-          if(S.mode==='pvp' && NET.active && NET.isHost){ // 온라인 호스트: 왼쪽=WS
-            const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1;
-          }else if(S.L[0].aiSide==='L'){ act=await aiActLeft(S.L[0].y, S.R[0]?.y??H/2); }
-          else if(S.mode==='pvp'){ // 로컬 PVP: 왼쪽=WS
-            const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1;
-          }
-          applyVertical(S.L[0], act); if(Math.random()<.6) pushPaddleTrail('L');
-        }
-        // R
-        if(S.R[0]){ let act=1;
-          if(S.mode==='pvp'){ // 로컬 PVP: 오른쪽=Arrow 전용 (WS 무시)
-            const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown'); act=up&&!dn?0:dn&&!up?2:1;
-          }else if(S.R[0].isHuman && !(NET.active && NET.isHost)){ // 로컬 AIP 등
-            const up=(Keys.get('ArrowUp'))?true:false; const dn=(Keys.get('ArrowDown'))?true:false; act=up&&!dn?0:dn&&!up?2:1;
-          }else if(S.R[0].aiSide==='R'){ act=await aiActRight(S.R[0].y, S.L[0]?.y??H/2); }
-          if(!(NET.active && NET.isHost && S.mode==='pvp')) applyVertical(S.R[0], act); // 호스트 PVP 온라인은 게스트 입력으로 별도 적용
-          if(Math.random()<.6) pushPaddleTrail('R');
-        }
+    // Beat/Time counters
+    if(G.kind==='beat') G.time+=dt;
+    if(G.kind==='time') { G.echo=Math.max(0,G.echo-dt); G.hist.push({x:S.ball.x,y:S.ball.y}); if(G.hist.length>60*0.8) G.hist.shift(); }
+    if(G.kind==='gate'){ G.pT+=dt; }
 
-        // 호스트/로컬만 공 이동 및 판정
-        S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
-        if(S.ball.y<=BR||S.ball.y>=H-BR){
-          S.ball.y=S.ball.y<=BR?BR:H-BR; S.ball.vy=S.ball.y===BR?Math.abs(S.ball.vy):-Math.abs(S.ball.vy);
-          const cur=speed(S.ball), sp=Math.min(B_MAX, cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang);
-          screenShake(4); spawnSpeedLines(S.ball.vx,S.ball.vy);
-        }
-        if(S.ball.vx<0){ const p=S.L[0]; if(p){ const Lr={x:26,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Lr.x,Lr.y,Lr.w,Lr.h)) bounce(true,p.y); }}
-        else{ const p=S.R[0]; if(p){ const Rr={x:W-26-PW,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Rr.x,Rr.y,Rr.w,Rr.h)) bounce(false,p.y); }}
-
-        let scored=null; if(S.ball.x<-BR){S.sR++; S.rallyRight=true; scored='RIGHT';} if(S.ball.x>W+BR){S.sL++; S.rallyRight=false; scored='LEFT';}
-        if(scored){ spawnScorePop(scored==='LEFT'?'LEFT +1':'RIGHT +1'); screenShake(12); resetRound(); }
-        spawnSpeedLines(S.ball.vx,S.ball.vy); updateSparks(dt); updateSpeedLines(dt);
-      } else {
-        // QUAD (로컬 전용)
-        if(S.L[0]){ let act=1; const ty=S.ball.y; act=(ty<S.L[0].y-4)?0:(ty>S.L[0].y+4)?2:1; applyVertical(S.L[0], act); if(Math.random()<.6) pushPaddleTrail('L'); }
-        if(S.R[0]){ let act=1; if(S.R[0].isHuman){ const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown'); act=up&&!dn?0:dn&&!up?2:1; } else { const ty=S.ball.y; act=(ty<S.R[0].y-4)?0:(ty>S.R[0].y+4)?2:1; } applyVertical(S.R[0], act); if(Math.random()<.6) pushPaddleTrail('R'); }
-        if(S.T[0]){ let act=1; const tx=S.ball.x; act=(tx<S.T[0].x-4)?0:(tx>S.T[0].x+4)?2:1; applyHorizontal(S.T[0], act); if(Math.random()<.6) pushPaddleTrail('T'); }
-        if(S.B[0]){ let act=1; const tx=S.ball.x; act=(tx<S.B[0].x-4)?0:(tx>S.B[0].x+4)?2:1; applyHorizontal(S.B[0], act); if(Math.random()<.6) pushPaddleTrail('B'); }
-        S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
-        if(S.ball.x <= QUAD.marginX+BR){ const p=S.L[0]; const rx=QUAD.marginX-QUAD.padThick, ry=p.y-QUAD.padLong/2, rw=QUAD.padThick, rh=QUAD.padLong;
-          if(circleRect(S.ball.x,S.ball.y,BR,rx,ry,rw,rh)) bounce(true,p.y);
-          else { S.ball.x=QUAD.marginX+BR; S.ball.vx=Math.abs(S.ball.vx); const cur=speed(S.ball), sp=Math.min(B_MAX,cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang); screenShake(4);} }
-        if(S.ball.x >= QUAD.marginX+QUAD.size-BR){ const p=S.R[0]; const rx=QUAD.marginX+QUAD.size, ry=p.y-QUAD.padLong/2, rw=QUAD.padThick, rh=QUAD.padLong;
-          if(circleRect(S.ball.x,S.ball.y,BR,rx,ry,rw,rh)) bounce(false,p.y);
-          else { S.ball.x=QUAD.marginX+QUAD.size-BR; S.ball.vx=-Math.abs(S.ball.vx); const cur=speed(S.ball), sp=Math.min(B_MAX,cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang); screenShake(4);} }
-        if(S.ball.y <= QUAD.marginY+BR){ const p=S.T[0]; const rx=p.x-QUAD.padLong/2, ry=QUAD.marginY-QUAD.padThick, rw=QUAD.padLong, rh=QUAD.padThick;
-          if(circleRect(S.ball.x,S.ball.y,BR,rx,ry,rw,rh)) bounceHorizontal(true,p.x);
-          else { S.ball.y=QUAD.marginY+BR; S.ball.vy=Math.abs(S.ball.vy); const cur=speed(S.ball), sp=Math.min(B_MAX,cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang); screenShake(4);} }
-        if(S.ball.y >= QUAD.marginY+QUAD.size-BR){ const p=S.B[0]; const rx=p.x-QUAD.padLong/2, ry=QUAD.marginY+QUAD.size, rw=QUAD.padLong, rh=QUAD.padThick;
-          if(circleRect(S.ball.x,S.ball.y,BR,rx,ry,rw,rh)) bounceHorizontal(false,p.x);
-          else { S.ball.y=QUAD.marginY+QUAD.size-BR; S.ball.vy=-Math.abs(S.ball.vy); const cur=speed(S.ball), sp=Math.min(B_MAX,cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang); screenShake(4);} }
-        let scored=null; if(S.ball.x<QUAD.marginX-BR){S.sR++; S.rallyRight=true; scored='RIGHT';}
-        if(S.ball.x>QUAD.marginX+QUAD.size+BR){S.sL++; S.rallyRight=false; scored='LEFT';}
-        if(scored){ spawnScorePop(scored==='LEFT'?'LEFT +1':'RIGHT +1'); screenShake(12); resetRound(); }
-        spawnSpeedLines(S.ball.vx,S.ball.vy); updateSparks(dt); updateSpeedLines(dt);
+    if(!isGuestOnline){
+      // L
+      if(S.L[0]){
+        let act=1;
+        if(S.mode==='pvp' && NET.active && NET.isHost){ const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1; }
+        else if(S.mode==='pvp'){ const up=!!Keys.get('KeyW'), dn=!!Keys.get('KeyS'); act=up&&!dn?0:dn&&!up?2:1; }
+        else if(S.L[0].aiSide==='L'){ act=await aiActLeft(S.L[0].y, S.R[0]?.y??H/2); }
+        applyVertical(S.L[0], act); if(Math.random()<.6) pushPaddleTrail('L');
       }
+      // R
+      if(S.R[0]){
+        let act=1;
+        if(S.mode==='pvp'){ const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown'); act=up&&!dn?0:dn&&!up?2:1; }
+        else if(S.R[0].isHuman && !(NET.active && NET.isHost)){ const up=!!Keys.get('ArrowUp'), dn=!!Keys.get('ArrowDown'); act=up&&!dn?0:dn&&!up?2:1; }
+        else if(S.R[0].aiSide==='R'){ act=await aiActRight(S.R[0].y, S.L[0]?.y??H/2); }
+        if(!(NET.active && NET.isHost && S.mode==='pvp')) applyVertical(S.R[0], act);
+        if(Math.random()<.6) pushPaddleTrail('R');
+      }
+
+      // Gateball accel
+      if(G.kind==='gate') gateAccel(dt);
+
+      // ball move
+      S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
+
+      // walls
+      if(S.ball.y<=BR||S.ball.y>=H-BR){
+        S.ball.y=S.ball.y<=BR?BR:H-BR;
+        S.ball.vy=S.ball.y===BR?Math.abs(S.ball.vy):-Math.abs(S.ball.vy);
+        const cur=speed(S.ball), sp=Math.min(B_MAX, cur*GROW_WALL), ang=Math.atan2(S.ball.vy,S.ball.vx); setSpeedDir(S.ball,sp,ang);
+        screenShake(4); spawnSpeedLines(S.ball.vx,S.ball.vy);
+      }
+
+      // portals
+      if(G.kind==='gate'){ tryPortal(); }
+
+      // paddles collision
+      if(S.ball.vx<0){ const p=S.L[0]; if(p){ const Lr={x:26,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Lr.x,Lr.y,Lr.w,Lr.h)) bounce(true,p.y); }}
+      else{ const p=S.R[0]; if(p){ const Rr={x:W-26-PW,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Rr.x,Rr.y,Rr.w,Rr.h)) bounce(false,p.y); }}
+
+      // score
+      let scored=null; if(S.ball.x<-BR){S.sR++; S.rallyRight=true; scored='RIGHT';} if(S.ball.x>W+BR){S.sL++; S.rallyRight=false; scored='LEFT';}
+      if(scored){ spawnScorePop(scored==='LEFT'?'LEFT +1':'RIGHT +1'); screenShake(12); resetRound(); }
+      spawnSpeedLines(S.ball.vx,S.ball.vy); updateSparks(dt); updateSpeedLines(dt);
     }
 
     if(S.run){ S.t=Math.max(0,S.t-dt); timeEl.textContent=fmt(S.t); if(S.t===0) endMatch(); }
   }
 
-  // 호스트: 온라인 PvP 상태 브로드캐스트(30Hz)
+  // Host → Guest state sync (online PvP only)
   if(NET.active && NET.isHost && NET.ingame && S.scene==='play' && S.mode==='pvp' && S.modeVariant==='duel'){
     _stateTick+=dt;
     if(_stateTick>=1/30){
@@ -495,6 +615,8 @@ async function loop(now=performance.now()){
 requestAnimationFrame(loop);
 
 /* ======= Round / End ======= */
+function spawnScorePop(text){ S.scorePop={text,age:0,life:.9}; }
+function drawScorePop(dt){ if(!S.scorePop) return; const p=S.scorePop; p.age+=dt; const t=Math.min(1,p.age/p.life), y=H*0.3-30*t, a=(1-t); ctx.save(); ctx.globalAlpha=a; ctx.fillStyle='#EAF0FF'; ctx.font='900 44px Inter,system-ui'; ctx.textAlign='center'; ctx.fillText(p.text, W/2, y); ctx.restore(); if(p.age>=p.life) S.scorePop=null; }
 function endMatch(){ S.run=false; show(postOv,true);
   postInner.innerHTML=`<div style="display:grid;gap:12px;place-items:center">
     <div style="font-size:40px;font-weight:900">경기 종료</div>
@@ -556,13 +678,13 @@ btnHostGo.onclick=async()=>{
 };
 btnCopy.onclick=()=>{ navigator.clipboard.writeText(NET.roomCode); btnCopy.textContent='복사됨'; setTimeout(()=>btnCopy.textContent='코드 복사',900); };
 
-// 온라인 시작(항상 pvp/duel)
+// 온라인 시작(항상 pvp/duel, 기믹은 온라인 미적용)
 btnStart.onclick=()=>{ if(!NET.isHost||NET.conns.size<1) return;
   const st={ sL:0,sR:0, rallyRight:Math.random()<.5, t:MATCH_SEC, ball:{x:W/2,y:H/2,vx:B_INIT,vy:0}, mode:'pvp', variant:'duel' };
   for(const c of NET.conns.values()){ try{ c.open && c.send({type:'start',state:st, host:(hostName.value||'Host')}); }catch{} }
   applyMatchFromHost(st);
   startMode('pvp','duel');
-  // 온라인 입력 역할: 호스트=L(WS), 게스트=R(↑↓)
+  // 역할: 호스트=L(WS), 게스트=R(↑↓)
   S.L[0].isHuman=true; S.L[0].upKey='KeyW'; S.L[0].downKey='KeyS';
   S.R[0].isHuman=true; S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown';
   NET.ingame=true; show(modeOv,false); show(titleOv,false);
