@@ -260,13 +260,24 @@ const setSpeedDir=(b,sp,ang)=>{ b.vx=Math.cos(ang)*sp; b.vy=Math.sin(ang)*sp; };
 const screenShake=p=>{ S.shake=Math.max(S.shake,p); };
 const ballPolar=()=> S.ball.vx>=0?1:-1;
 
+/* ======= QuickStart (Enter/Space 즉시 시작) ======= */
+function quickStart(){
+  if(S.scene==='play') return;
+  startMode('aip','duel'); // 기본: 로컬 AI vs Player(오른쪽)
+  show(modeOv, false);
+  show(titleOv, false);
+  show(postOv, false);
+}
+
 /* ======= Input ======= */
 const Keys=new Map();
 addEventListener('keydown',e=>{
   Keys.set(e.code,true);
   if(e.code==='KeyP') S.paused=!S.paused;
   if(e.code==='KeyR') resetRound();
-  if(S.scene==='title' && (e.code==='Enter'||e.code==='Space')) titleOv.click();
+
+  // 어디서든 플레이가 아니면 Enter/Space로 바로 시작
+  if(S.scene!=='play' && (e.code==='Enter'||e.code==='Space')) quickStart();
 
   // Polar toggles
   if(G.kind==='polar'){
@@ -324,7 +335,7 @@ document.querySelectorAll('.chip').forEach(ch=>{
 });
 
 /* ======= Buttons ======= */
-document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(modeOv=false); show(postOv,false); };
+document.getElementById('btnTitle').onclick=()=>{ S.scene='title'; S.run=false; show(titleOv,true); show(modeOv, false); show(postOv,false); };
 document.getElementById('btnReset').onclick=()=> resetRound();
 document.getElementById('btnPause').onclick=()=> S.paused=!S.paused;
 
@@ -473,7 +484,6 @@ function tryPortal(){
     S.ball.vx=Math.cos(ang)*sp; S.ball.vy=Math.sin(ang)*sp;
     screenShake(9);
   }
-  // 8~12초마다 리롤
   if(G.pT> (8+Math.random()*4)) spawnGate();
 }
 
@@ -485,14 +495,11 @@ function draw(dt){
 
   // Gateball décor
   if(G.kind==='gate'){
-    // grid
     ctx.fillStyle='rgba(30,44,88,.6)';
     for(let x=0;x<W;x+=28) ctx.fillRect(x,H/2-1,14,2);
     for(let y=0;y<H;y+=28) ctx.fillRect(W/2-1,y,2,14);
-    // portals
     if(G.portalA){ ctx.beginPath(); ctx.arc(G.portalA[0],G.portalA[1],G.portalA[2],0,Math.PI*2); ctx.strokeStyle='rgba(120,200,255,.9)'; ctx.lineWidth=3; ctx.stroke(); }
     if(G.portalB){ ctx.beginPath(); ctx.arc(G.portalB[0],G.portalB[1],G.portalB[2],0,Math.PI*2); ctx.strokeStyle='rgba(255,160,120,.9)'; ctx.lineWidth=3; ctx.stroke(); }
-    // wells
     ctx.fillStyle='rgba(110,140,255,.9)';
     for(const w of G.wells) circle(w[0],w[1],6,ctx.fillStyle);
   }
@@ -511,23 +518,18 @@ function draw(dt){
 
   drawSpeedLines(); drawFlameTrail();
 
-  // paddle trails
   if(S.L[0]) drawPaddleTrail(S.L[0],'L'); if(S.R[0]) drawPaddleTrail(S.R[0],'R');
 
-  // paddles
   if(S.L[0]) rr(26, S.L[0].y-PH/2, PW, PH, 6, COLORS.L);
   if(S.R[0]) rr(W-26-PW, S.R[0].y-PH/2, PW, PH, 6, COLORS.R);
 
-  // ball
   circle(S.ball.x,S.ball.y,BR,'#101420'); circle(S.ball.x,S.ball.y,BR-2,'#1b2238'); circle(S.ball.x,S.ball.y,BR-3,'#FFC857');
   drawSparks();
 
-  // HUD
   ctx.fillStyle='#DCE6FF'; ctx.font='bold 28px Inter,system-ui';
   ctx.textAlign='right'; ctx.fillText(String(S.sL), W*0.5-60,40);
   ctx.textAlign='left'; ctx.fillText(String(S.sR), W*0.5+60,40);
 
-  // Beat combo
   if(G.kind==='beat' && G.combo>0){
     ctx.fillStyle='#FFEFB4'; ctx.font='bold 16px Inter,system-ui'; ctx.textAlign='center';
     ctx.fillText('COMBO x'+G.combo, W/2, 58);
@@ -545,7 +547,6 @@ async function loop(now=performance.now()){
   const isGuestOnline = (NET.active && !NET.isHost && NET.ingame);
 
   if(S.scene==='play' && !S.paused){
-    // Beat/Time counters
     if(G.kind==='beat') G.time+=dt;
     if(G.kind==='time') { G.echo=Math.max(0,G.echo-dt); G.hist.push({x:S.ball.x,y:S.ball.y}); if(G.hist.length>60*0.8) G.hist.shift(); }
     if(G.kind==='gate'){ G.pT+=dt; }
@@ -569,13 +570,10 @@ async function loop(now=performance.now()){
         if(Math.random()<.6) pushPaddleTrail('R');
       }
 
-      // Gateball accel
       if(G.kind==='gate') gateAccel(dt);
 
-      // ball move
       S.ball.x+=S.ball.vx*dt; S.ball.y+=S.ball.vy*dt;
 
-      // walls
       if(S.ball.y<=BR||S.ball.y>=H-BR){
         S.ball.y=S.ball.y<=BR?BR:H-BR;
         S.ball.vy=S.ball.y===BR?Math.abs(S.ball.vy):-Math.abs(S.ball.vy);
@@ -583,14 +581,11 @@ async function loop(now=performance.now()){
         screenShake(4); spawnSpeedLines(S.ball.vx,S.ball.vy);
       }
 
-      // portals
       if(G.kind==='gate'){ tryPortal(); }
 
-      // paddles collision
       if(S.ball.vx<0){ const p=S.L[0]; if(p){ const Lr={x:26,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Lr.x,Lr.y,Lr.w,Lr.h)) bounce(true,p.y); }}
       else{ const p=S.R[0]; if(p){ const Rr={x:W-26-PW,y:p.y-PH/2,w:PW,h:PH}; if(circleRect(S.ball.x,S.ball.y,BR,Rr.x,Rr.y,Rr.w,Rr.h)) bounce(false,p.y); }}
 
-      // score
       let scored=null; if(S.ball.x<-BR){S.sR++; S.rallyRight=true; scored='RIGHT';} if(S.ball.x>W+BR){S.sL++; S.rallyRight=false; scored='LEFT';}
       if(scored){ spawnScorePop(scored==='LEFT'?'LEFT +1':'RIGHT +1'); screenShake(12); resetRound(); }
       spawnSpeedLines(S.ball.vx,S.ball.vy); updateSparks(dt); updateSpeedLines(dt);
@@ -599,7 +594,6 @@ async function loop(now=performance.now()){
     if(S.run){ S.t=Math.max(0,S.t-dt); timeEl.textContent=fmt(S.t); if(S.t===0) endMatch(); }
   }
 
-  // Host → Guest state sync (online PvP only)
   if(NET.active && NET.isHost && NET.ingame && S.scene==='play' && S.mode==='pvp' && S.modeVariant==='duel'){
     _stateTick+=dt;
     if(_stateTick>=1/30){
@@ -684,7 +678,6 @@ btnStart.onclick=()=>{ if(!NET.isHost||NET.conns.size<1) return;
   for(const c of NET.conns.values()){ try{ c.open && c.send({type:'start',state:st, host:(hostName.value||'Host')}); }catch{} }
   applyMatchFromHost(st);
   startMode('pvp','duel');
-  // 역할: 호스트=L(WS), 게스트=R(↑↓)
   S.L[0].isHuman=true; S.L[0].upKey='KeyW'; S.L[0].downKey='KeyS';
   S.R[0].isHuman=true; S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown';
   NET.ingame=true; show(modeOv,false); show(titleOv,false);
@@ -715,10 +708,9 @@ btnJoinGo.onclick=async()=>{
         if(msg?.type==='start'){
           applyMatchFromHost(msg.state);
           startMode(msg.state.mode, msg.state.variant);
-          // 게스트는 오른쪽 플레이어(Arrow)
           S.L[0].isHuman=false; S.L[0].aiSide='L';
           S.R[0].isHuman=true;  S.R[0].upKey='ArrowUp'; S.R[0].downKey='ArrowDown';
-          NET.ingame=true; show(modeOv,false); show(titleOv=false);
+          NET.ingame=true; show(modeOv,false); show(titleOv,false);
         }
         if(msg?.type==='state'){
           const s=msg.s;
